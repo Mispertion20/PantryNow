@@ -1,24 +1,50 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { useEffect } from 'react';
+import { AppProvider } from './context/AppContext';
+import { AuthProvider, useAuthContext } from './context/AuthContext';
+import { initDB } from './db';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+function RootNavigator() {
+  const router = useRouter();
+  const segments = useSegments();
+  const { isAuthenticated, loading } = useAuthContext();
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+  useEffect(() => {
+    if (loading) return;
+
+    const inAuthRoute = segments[0] === '(auth)';
+
+    if (!isAuthenticated && !inAuthRoute) {
+      router.replace('/login');
+      return;
+    }
+
+    if (isAuthenticated && inAuthRoute) {
+      router.replace('/products');
+    }
+  }, [isAuthenticated, loading, segments, router]);
+
+  return <Stack screenOptions={{ headerShown: false }} />;
+}
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  useEffect(() => {
+    const init = async () => {
+      try {
+        await initDB();
+      } catch (error) {
+        console.error('Failed to initialize database:', error);
+      }
+    };
+    
+    init();
+  }, []);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <AuthProvider>
+      <AppProvider>
+        <RootNavigator />
+      </AppProvider>
+    </AuthProvider>
   );
 }

@@ -1,50 +1,58 @@
-# Welcome to your Expo app 👋
+# PantryNow (MongoDB + Node.js + Expo)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+PantryNow is now a full-stack app:
 
-## Get started
+- Frontend: Expo React Native (in `app/`)
+- Backend: Node.js + Express + MongoDB (in `backend/`)
+- Authentication: JWT-based login/register
+- Data model is user-scoped (products, recipes, ingredients, history)
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## 1) Install dependencies
 
 ```bash
-npm run reset-project
+npm install
+npm --prefix backend install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## 2) Backend configuration
 
-## Learn more
+Create `backend/.env`:
 
-To learn more about developing your project with Expo, look at the following resources:
+```env
+PORT=4000
+MONGODB_URI=mongodb+srv://akezhanaskar_db_user:SDoMBEgQVKwIJJ0p@cluster0.s0hurb2.mongodb.net/pantrynow?retryWrites=true&w=majority&appName=Cluster0
+JWT_SECRET=pantrynow_super_secret_change_me
+CLIENT_ORIGIN=*
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 3) Run backend
 
-## Join the community
+```bash
+npm run backend:dev
+```
 
-Join our community of developers creating universal apps.
+## 4) Run mobile app
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx expo start
+```
+
+If needed, set API URL in frontend via:
+
+```env
+EXPO_PUBLIC_API_BASE_URL=http://<your-machine-ip>:4000/api
+```
+
+`app/lib/api.ts` already has smart defaults for emulator/local usage.
+
+## API overview
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `GET/POST/PATCH/DELETE /api/products`
+- `GET/POST/PUT/DELETE /api/recipes`
+- `POST /api/recipes/:id/cook`
+- `GET/POST /api/recipes/:id/ingredients`
+- `PUT/DELETE /api/recipe-ingredients/:id`
+- `GET /api/history`
