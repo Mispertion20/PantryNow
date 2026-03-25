@@ -3,6 +3,7 @@ import express from 'express';
 import { connectToDatabase } from './config/db.js';
 import { env } from './config/env.js';
 import { requireAuth } from './middleware/auth.js';
+import aiRoutes from './routes/ai.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import historyRoutes from './routes/history.routes.js';
 import productsRoutes from './routes/products.routes.js';
@@ -24,6 +25,7 @@ app.use('/api/products', requireAuth, productsRoutes);
 app.use('/api/recipes', requireAuth, recipesRoutes);
 app.use('/api/history', requireAuth, historyRoutes);
 app.use('/api/recipe-ingredients', requireAuth, recipeIngredientsRoutes);
+app.use('/api/ai', requireAuth, aiRoutes);
 
 app.use((error, _req, res, _next) => {
   res.status(500).json({ message: 'Unexpected server error', details: error.message });

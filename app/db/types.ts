@@ -52,6 +52,23 @@ export interface ProductUpdateInput {
   unit?: string;
 }
 
+export interface RecommendedRecipe {
+  recipe: Recipe;
+  score: number;
+  reason: string;
+  tags: string[];
+  availability: {
+    total: number;
+    available: number;
+    percentage: number;
+  };
+}
+
+export interface AIRecommendations {
+  recommendations: RecommendedRecipe[];
+  reasoning: string;
+}
+
 export interface Database {
   initDB(): Promise<void>;
   getProducts(): Promise<Product[]>;

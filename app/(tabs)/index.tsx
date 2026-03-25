@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     Alert,
     Platform,
@@ -9,18 +10,50 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { Button } from '../components/Button';
+import { AIRecommendationsList } from '../components/AIRecommendations';
 import { CookIngredientsModal } from '../components/CookIngredientsModal';
-import { RecipeCard } from '../components/RecipeCard';
 import { useAppContext } from '../context/AppContext';
 import { useAuthContext } from '../context/AuthContext';
-import type { Recipe } from '../db/types';
+import type { AIRecommendations, Recipe, RecommendedRecipe } from '../db/types';
+import { apiRequest } from '../lib/api';
 
 export default function HomeScreen() {
   const { recipes, products, cookRecipeWithIngredients, getRecipeIngredients } = useAppContext();
-  const { user, logout } = useAuthContext();
+  const { user, token, logout } = useAuthContext();
+  const router = useRouter();
   const [cookModalVisible, setCookModalVisible] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+
+  // AI recommendations state
+  const [aiRecs, setAiRecs] = useState<RecommendedRecipe[]>([]);
+  const [aiReasoning, setAiReasoning] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiFetched, setAiFetched] = useState(false);
+
+  const fetchAIRecommendations = useCallback(async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await apiRequest<{ data: AIRecommendations }>('/ai/recommendations', {
+        method: 'POST',
+      });
+      setAiRecs(res.data.recommendations);
+      setAiReasoning(res.data.reasoning);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Failed to get recommendations');
+    } finally {
+      setAiLoading(false);
+      setAiFetched(true);
+    }
+  }, []);
+
+  // Auto-fetch once when user is logged in and data is loaded
+  useEffect(() => {
+    if (token && recipes.length > 0 && !aiFetched) {
+      fetchAIRecommendations();
+    }
+  }, [token, recipes.length, aiFetched, fetchAIRecommendations]);
 
   const getTimeOfDay = (): 'Breakfast' | 'Lunch' | 'Dinner' => {
     const hour = new Date().getHours();
@@ -28,55 +61,6 @@ export default function HomeScreen() {
     if (hour < 18) return 'Lunch';
     return 'Dinner';
   };
-
-  const canCookRecipe = useCallback((recipe: Recipe): boolean => {
-    // Check if all required ingredients are available in the pantry with sufficient quantity
-    const ingredients = getRecipeIngredients(recipe.id);
-    
-    if (ingredients.length === 0) {
-      // Recipe has no ingredients defined, can still cook it
-      return true;
-    }
-    
-    // Check if all ingredients exist in products with sufficient quantity
-    return ingredients.every((ingredient) => {
-      const product = products.find(
-        (p) => p.name.toLowerCase() === ingredient.product_name.toLowerCase()
-      );
-      return product && product.quantity >= ingredient.amount_required;
-    });
-  }, [getRecipeIngredients, products]);
-
-  const recommendedRecipes = useMemo(() => {
-    const timeOfDay = getTimeOfDay();
-    const categoryMap: Record<string, string[]> = {
-      Breakfast: ['Breakfast'],
-      Lunch: ['Main Course'],
-      Dinner: ['Main Course'],
-    };
-
-    const preferredCategories = categoryMap[timeOfDay] || [];
-
-    const scored = recipes
-      .filter((recipe) => canCookRecipe(recipe))
-      .map((recipe) => {
-        const matchesCategory = preferredCategories.includes(recipe.category);
-
-        let score = recipe.times_cooked;
-        if (matchesCategory) score += 1000;
-        score += 500;
-
-        return {
-          recipe,
-          score,
-        };
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3)
-      .map((entry) => entry.recipe);
-
-    return scored;
-  }, [canCookRecipe, recipes]);
 
   const mostCooked = useMemo(() => {
     return recipes
@@ -88,9 +72,16 @@ export default function HomeScreen() {
   const timeOfDay = getTimeOfDay();
 
   const openCookModal = (recipe: Recipe) => {
-    if (!canCookRecipe(recipe)) return;
     setSelectedRecipe(recipe);
     setCookModalVisible(true);
+  };
+
+  const handleCookAIRec = (rec: RecommendedRecipe) => {
+    openCookModal(rec.recipe);
+  };
+
+  const handleViewRecipe = (recipeId: number) => {
+    router.push(`/recipes/${recipeId}`);
   };
 
   const handleConfirmCook = async (usedIngredients: { productName: string; amountUsed: number }[]) => {
@@ -176,32 +167,16 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Recommended for You */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recommended for You</Text>
-        {recommendedRecipes.length > 0 ? (
-          <View>
-            {recommendedRecipes.map((recipe) => (
-              <View key={recipe.id} style={styles.recommendedCard}>
-                <RecipeCard recipe={recipe} />
-                <Button
-                  title="Let's Cook!"
-                  variant="primary"
-                  onPress={() => openCookModal(recipe)}
-                />
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <Ionicons name="sad-outline" size={48} color="#ddd" />
-            <Text style={styles.emptyText}>No recipes available</Text>
-            <Text style={styles.emptySubText}>
-              Create recipes or add products to get recommendations
-            </Text>
-          </View>
-        )}
-      </View>
+      {/* AI Recommendations */}
+      <AIRecommendationsList
+        recommendations={aiRecs}
+        reasoning={aiReasoning}
+        loading={aiLoading}
+        error={aiError}
+        onRefresh={fetchAIRecommendations}
+        onCook={handleCookAIRec}
+        onViewRecipe={handleViewRecipe}
+      />
 
       {/* Most Cooked */}
       {mostCooked.length > 0 && (
@@ -328,33 +303,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 12,
     color: '#333',
-  },
-  recommendedCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 12,
-    padding: 12,
-    elevation: 2,
-  },
-  emptyState: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingVertical: 32,
-    alignItems: 'center',
-    elevation: 2,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 12,
-  },
-  emptySubText: {
-    fontSize: 13,
-    color: '#999',
-    marginTop: 4,
-    paddingHorizontal: 24,
-    textAlign: 'center',
   },
   favoritesList: {
     backgroundColor: '#fff',
