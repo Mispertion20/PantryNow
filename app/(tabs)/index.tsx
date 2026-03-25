@@ -2,8 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    Alert,
-    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -19,7 +17,7 @@ import { apiRequest } from '../lib/api';
 
 export default function HomeScreen() {
   const { recipes, products, cookRecipeWithIngredients, getRecipeIngredients } = useAppContext();
-  const { user, token, logout } = useAuthContext();
+  const { user, token } = useAuthContext();
   const router = useRouter();
   const [cookModalVisible, setCookModalVisible] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
@@ -91,31 +89,6 @@ export default function HomeScreen() {
     setSelectedRecipe(null);
   };
 
-  const handleLogout = () => {
-    if (Platform.OS === 'web') {
-      const confirmed = typeof window !== 'undefined'
-        ? window.confirm('Do you want to sign out from this account?')
-        : true;
-
-      if (confirmed) {
-        void logout();
-      }
-
-      return;
-    }
-
-    Alert.alert('Logout', 'Do you want to sign out from this account?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: () => {
-          void logout();
-        },
-      },
-    ]);
-  };
-
   return (
     <ScrollView style={styles.container}>
       {/* Welcome Banner */}
@@ -125,18 +98,6 @@ export default function HomeScreen() {
           <Text style={styles.greeting}>Good {timeOfDay === 'Breakfast' ? 'morning' : timeOfDay === 'Lunch' ? 'afternoon' : 'evening'},</Text>
             <Text style={styles.title}>What’s for {timeOfDay.toLowerCase()}?</Text>
             {user ? <Text style={styles.userName}>@{user.name}</Text> : null}
-          </View>
-
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.settingsButton}
-              onPress={() => router.push('/settings')}
-            >
-              <Ionicons name="settings-outline" size={20} color="#5E35B1" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <Ionicons name="log-out-outline" size={20} color="#FF6347" />
-            </TouchableOpacity>
           </View>
         </View>
         <View style={styles.bannerIcon}>
@@ -267,25 +228,10 @@ const styles = StyleSheet.create({
     color: '#777',
     fontWeight: '600',
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  settingsButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#F3E5F5',
-  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
-  },
-  logoutButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#FFF5F1',
   },
   statsContainer: {
     flexDirection: 'row',

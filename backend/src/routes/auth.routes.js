@@ -9,8 +9,9 @@ const router = express.Router();
 
 const buildAuthPayload = (user) => ({
   id: user._id.toString(),
-  name: user.name,
+  name: user.name || '',
   email: user.email,
+  avatar_data: user.avatar_data || '',
 });
 
 const createToken = (user) => {
@@ -29,14 +30,19 @@ router.post('/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: 'Name, email, and password are required' });
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
 
     if (password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    const normalizedName = String(name || '').trim();
+    if (normalizedName && normalizedName.length < 2) {
+      return res.status(400).json({ message: 'Name must be at least 2 characters long' });
     }
 
     const existingUser = await User.findOne({ email: normalizedEmail });
@@ -47,9 +53,10 @@ router.post('/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
 
     const user = await User.create({
-      name: String(name).trim(),
+      name: normalizedName,
       email: normalizedEmail,
       passwordHash,
+      avatar_data: '',
     });
 
     const token = createToken(user);
@@ -96,6 +103,42 @@ router.get('/me', requireAuth, async (req, res) => {
     return res.status(200).json({ data: buildAuthPayload(user) });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to fetch user profile', details: error.message });
+  }
+});
+
+router.put('/me', requireAuth, async (req, res) => {
+  try {
+    const { name, avatar_data } = req.body;
+    const updates = {};
+
+    if (name !== undefined) {
+      const normalizedName = String(name || '').trim();
+      if (normalizedName && normalizedName.length < 2) {
+        return res.status(400).json({ message: 'Name must be at least 2 characters long' });
+      }
+      updates.name = normalizedName;
+    }
+
+    if (avatar_data !== undefined) {
+      const normalizedAvatar = String(avatar_data || '');
+      if (normalizedAvatar.length > 12_000_000) {
+        return res.status(400).json({ message: 'Avatar image is too large' });
+      }
+      updates.avatar_data = normalizedAvatar;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: 'No profile fields provided to update' });
+    }
+
+    const user = await User.findByIdAndUpdate(req.user.userId, { $set: updates }, { new: true });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.status(200).json({ data: buildAuthPayload(user) });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to update profile', details: error.message });
   }
 });
 

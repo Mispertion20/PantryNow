@@ -7,6 +7,7 @@ export type AuthUser = {
   id: string;
   name: string;
   email: string;
+  avatar_data?: string;
 };
 
 export const saveAuthSession = async (token: string, user: AuthUser): Promise<void> => {

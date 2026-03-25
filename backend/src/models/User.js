@@ -4,10 +4,13 @@ const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
       trim: true,
-      minlength: 2,
+      default: '',
       maxlength: 60,
+      validate: {
+        validator: (value) => !value || value.length >= 2,
+        message: 'Name must be at least 2 characters long when provided',
+      },
     },
     email: {
       type: String,
@@ -28,6 +31,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ['deficit', 'surplus', 'neutral'],
       default: 'neutral',
+    },
+    avatar_data: {
+      type: String,
+      default: '',
     },
   },
   {
