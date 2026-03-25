@@ -70,16 +70,28 @@ export const AIRecommendationsList: React.FC<AIRecommendationsProps> = ({
 }) => {
   const [selectedRecommendation, setSelectedRecommendation] = React.useState<RecommendedRecipe | null>(null);
 
-  const getWhyThisRecipeText = (rec: RecommendedRecipe): string => {
+  const getWhyThisRecipePoints = (rec: RecommendedRecipe): string[] => {
+    if (Array.isArray(rec.why_this_recipe_points) && rec.why_this_recipe_points.length > 0) {
+      return rec.why_this_recipe_points;
+    }
+
     if (rec.why_this_recipe && rec.why_this_recipe.trim().length > 0) {
-      return rec.why_this_recipe;
+      return rec.why_this_recipe
+        .split(/(?<=[.!?])\s+/)
+        .map((point) => point.trim())
+        .filter((point) => point.length > 0)
+        .slice(0, 6);
     }
 
     const pantrySummary = rec.availability.total > 0
       ? `Pantry fit: ${rec.availability.available}/${rec.availability.total} ingredients are available.`
       : 'Pantry fit: this recipe has minimal tracked ingredient constraints.';
 
-    return `${rec.reason} ${pantrySummary} Priority factors: pantry availability, meal-time fit, your history/favorites, and your saved goal.`;
+    return [
+      rec.reason,
+      pantrySummary,
+      'Priority factors: pantry availability, meal-time fit, your history/favorites, and your saved goal.',
+    ];
   };
 
   if (loading) {
@@ -172,7 +184,7 @@ export const AIRecommendationsList: React.FC<AIRecommendationsProps> = ({
                 </Text>
               </View>
 
-              <Text style={styles.cardReason} numberOfLines={2}>
+              <Text style={styles.cardReason} numberOfLines={3}>
                 {rec.reason}
               </Text>
 
@@ -255,9 +267,14 @@ export const AIRecommendationsList: React.FC<AIRecommendationsProps> = ({
             </Text>
 
             <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
-              <Text style={styles.modalBodyText}>
-                {selectedRecommendation ? getWhyThisRecipeText(selectedRecommendation) : ''}
-              </Text>
+              {selectedRecommendation
+                ? getWhyThisRecipePoints(selectedRecommendation).map((point, index) => (
+                    <View key={`${selectedRecommendation.recipe.id}-${index}`} style={styles.modalBulletRow}>
+                      <Text style={styles.modalBullet}>•</Text>
+                      <Text style={styles.modalBodyText}>{point}</Text>
+                    </View>
+                  ))
+                : null}
             </ScrollView>
 
             <TouchableOpacity style={styles.modalActionButton} onPress={() => setSelectedRecommendation(null)}>
@@ -399,9 +416,9 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   cardReason: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: '#666',
-    lineHeight: 18,
+    lineHeight: 19,
     marginBottom: 6,
   },
   whyButton: {
@@ -536,9 +553,21 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   modalBodyText: {
+    flex: 1,
     fontSize: 13,
     color: '#444',
     lineHeight: 20,
+  },
+  modalBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+    gap: 6,
+  },
+  modalBullet: {
+    fontSize: 16,
+    lineHeight: 20,
+    color: '#6A1B9A',
   },
   modalActionButton: {
     marginTop: 12,

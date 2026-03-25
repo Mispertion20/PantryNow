@@ -117,7 +117,19 @@ const buildRecipeContext = (recipe, ingredientsByRecipe) => {
   };
 };
 
-const buildWhyThisRecipeText = ({
+const pickVariant = (seed, variants) => {
+  if (!Array.isArray(variants) || variants.length === 0) return '';
+  const index = Math.abs(Number(seed) || 0) % variants.length;
+  return variants[index];
+};
+
+const titleCaseMeal = (mealTime) => {
+  if (!mealTime) return 'Meal';
+  return String(mealTime).charAt(0).toUpperCase() + String(mealTime).slice(1);
+};
+
+const buildReadableRecommendationReasons = ({
+  recipeTitle,
   recommendationGoal,
   nextMealTarget,
   mealTime,
@@ -127,41 +139,82 @@ const buildWhyThisRecipeText = ({
   availability,
   recipeFillingScore,
   category,
+  topTasteMatches,
+  seed,
 }) => {
-  const goalLine = recommendationGoal === 'deficit'
-    ? 'Goal fit: this recipe is prioritized for your calorie-deficit mode with a lighter estimated nutrition profile.'
+  const goalPhrase = recommendationGoal === 'deficit'
+    ? pickVariant(seed + 1, [
+        'supports your deficit target with a lighter profile',
+        'fits your deficit mode by avoiding heavy options',
+        'aligns with your goal to keep meals lighter',
+      ])
     : recommendationGoal === 'surplus'
-      ? 'Goal fit: this recipe is prioritized for your calorie-surplus mode with a more filling estimated nutrition profile.'
-      : 'Goal fit: this recipe is prioritized for your neutral mode as a balanced choice.';
+      ? pickVariant(seed + 1, [
+          'supports your surplus target with a more filling profile',
+          'fits your surplus mode by prioritizing dense meals',
+          'aligns with your goal to increase meal fullness',
+        ])
+      : pickVariant(seed + 1, [
+          'keeps a balanced profile for your neutral mode',
+          'matches your neutral goal with moderate meal weight',
+          'fits your balanced cooking preference',
+        ]);
 
-  const previousMealLine = nextMealTarget.target === 'lighter'
-    ? 'Previous meal logic: your recent meal was heavier, so this recommendation is tuned to be lighter.'
+  const mealContextPhrase = nextMealTarget.target === 'lighter'
+    ? pickVariant(seed + 2, [
+        'chosen as a lighter follow-up to your last heavier meal',
+        'selected to reduce meal heaviness after your previous dish',
+        'prioritized as a lighter next step from your recent meal',
+      ])
     : nextMealTarget.target === 'filling'
-      ? 'Previous meal logic: your recent meal was lighter, so this recommendation is tuned to be more filling.'
-      : 'Previous meal logic: your recent meal was balanced, so this recommendation keeps a balanced profile.';
+      ? pickVariant(seed + 2, [
+          'chosen as a more filling follow-up to your last lighter meal',
+          'selected to raise fullness after your recent light dish',
+          'prioritized to bring more meal density next',
+        ])
+      : pickVariant(seed + 2, [
+          'chosen to keep a balanced flow from your last meal',
+          'selected to maintain your recent balanced meal rhythm',
+          'prioritized as a steady next meal option',
+        ]);
 
-  const pantryLine = availability.total > 0
-    ? `Pantry fit: you currently have ${availability.available}/${availability.total} required ingredients (${availability.percentage}%), so this is practical to cook now.`
-    : 'Pantry fit: this recipe has no tracked ingredient requirements, so pantry constraints are minimal.';
+  const pantryPhrase = availability.total > 0
+    ? `${availability.available}/${availability.total} ingredients are already available`
+    : 'it has minimal pantry constraints';
 
-  const historyLine = isLiked
-    ? 'Preference fit: you liked this recipe before, so your favorites are weighted higher.'
-    : timesCooked > 0
-      ? `Preference fit: you cooked this ${timesCooked} time${timesCooked === 1 ? '' : 's'}, so your history suggests it matches your taste.`
-      : 'Preference fit: this is a discovery option to add variety beyond your usual recipes.';
+  const preferencePhrase = isLiked
+    ? 'you already liked this recipe, so your preference score is high'
+    : timesCooked >= 2
+      ? `you cooked this ${timesCooked} times, showing strong repeat preference`
+      : timesCooked === 1
+        ? 'you cooked this before, so it remains familiar'
+        : 'it adds variety beyond your usual rotation';
 
-  const mealLine = matchesMealTime
-    ? `Meal-time fit: this category (${category}) matches your current ${mealTime} context and gets a ranking boost.`
-    : `Meal-time fit: this category (${category}) is less aligned with ${mealTime}, so it was ranked lower than better meal-time matches.`;
+  const mealFitPhrase = matchesMealTime
+    ? `${titleCaseMeal(mealTime)} fit is strong because ${category} is in your preferred categories`
+    : `${category} is less aligned with ${mealTime}, so it ranks below tighter meal-time matches`;
 
-  return [
-    goalLine,
-    previousMealLine,
-    pantryLine,
-    historyLine,
-    mealLine,
-    `Priority factors used: pantry availability, goal alignment, history/favorites, meal-time relevance, and nutrition balance (estimated filling score ${recipeFillingScore}/100).`,
-  ].join(' ');
+  const tasteMatchPhrase = topTasteMatches.length > 0
+    ? `flavor continuity is high through ingredients you often use (${topTasteMatches.slice(0, 2).join(', ')})`
+    : 'this option broadens your taste profile while still respecting your goal';
+
+  const shortReason = pickVariant(seed + 3, [
+    `${recipeTitle} ${goalPhrase}, and ${pantryPhrase}.`,
+    `${recipeTitle} was prioritized because ${preferencePhrase}, with ${pantryPhrase}.`,
+    `${recipeTitle} ranks high now because ${mealContextPhrase}, and ${pantryPhrase}.`,
+  ]);
+
+  const points = [
+    `Goal fit: ${goalPhrase}.`,
+    `Recent-meal logic: ${mealContextPhrase}.`,
+    `Pantry reality: ${pantryPhrase}.`,
+    `Personal preference: ${preferencePhrase}.`,
+    `Meal-time priority: ${mealFitPhrase}.`,
+    `Taste signal: ${tasteMatchPhrase}.`,
+    `Engine factors combined: goal (${recommendationGoal}), pantry readiness, meal-time relevance, history/likes, and estimated filling score (${recipeFillingScore}/100).`,
+  ];
+
+  return { shortReason, points };
 };
 
 // ─── POST /api/ai/recommendations ────────────────────────────────────────────
@@ -399,6 +452,27 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
 
     const preferredCategories = preferredCategoriesByMeal[mealTime] || new Set();
 
+    const cookedRecipes = recipes
+      .filter((recipe) => recipe.times_cooked > 0)
+      .sort((a, b) => b.times_cooked - a.times_cooked)
+      .slice(0, 8);
+
+    const favoriteIngredientsMap = new Map();
+    for (const recipe of cookedRecipes) {
+      const ings = recipeIngredientsById.get(recipe.id) || [];
+      for (const ing of ings) {
+        const key = String(ing.name || '').trim().toLowerCase();
+        if (!key) continue;
+        const current = favoriteIngredientsMap.get(key) || 0;
+        favoriteIngredientsMap.set(key, current + Math.max(1, recipe.times_cooked));
+      }
+    }
+
+    const topFavoriteIngredients = [...favoriteIngredientsMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([name]) => name);
+
     const reranked = enriched
       .map((entry) => {
         const category = entry.recipe.category;
@@ -441,20 +515,16 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
           if (recipeFillingScore <= 35) adjustedScore -= 10;
         }
 
-        const mealContextReasonPrefix = nextMealTarget.target === 'lighter'
-          ? 'Suggested as a lighter follow-up to your previous heavy meal.'
-          : nextMealTarget.target === 'filling'
-            ? 'Suggested as a more filling follow-up to your previous light meal.'
-            : 'Suggested as a balanced follow-up to your previous meal.';
-
-        const goalReasonPrefix = recommendationGoal === 'deficit'
-          ? 'Aligned with your calorie-deficit goal.'
-          : recommendationGoal === 'surplus'
-            ? 'Aligned with your calorie-surplus goal.'
-            : 'Aligned with your neutral cooking mode.';
-
         const aiSafeTags = entry.tags.filter((tag) => tag !== 'pantry-ready');
-        const whyThisRecipe = buildWhyThisRecipeText({
+        const recipeIngredientNames = recipeIngredients
+          .map((ingredient) => String(ingredient.name || '').trim().toLowerCase())
+          .filter(Boolean);
+        const topTasteMatches = recipeIngredientNames
+          .filter((name) => topFavoriteIngredients.includes(name))
+          .slice(0, 3);
+
+        const { shortReason, points: whyThisRecipePoints } = buildReadableRecommendationReasons({
+          recipeTitle: entry.recipe.title,
           recommendationGoal,
           nextMealTarget,
           mealTime,
@@ -464,12 +534,15 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
           availability: entry.availability,
           recipeFillingScore,
           category,
+          topTasteMatches,
+          seed: entry.recipe.id + recipeFillingScore + entry.availability.percentage,
         });
 
         return {
           ...entry,
-          reason: `${goalReasonPrefix} ${mealContextReasonPrefix} ${entry.reason}`.trim(),
-          why_this_recipe: whyThisRecipe,
+          reason: shortReason,
+          why_this_recipe: whyThisRecipePoints.join(' '),
+          why_this_recipe_points: whyThisRecipePoints,
           tags: Array.from(new Set([
             ...aiSafeTags,
             ...(isLiked ? ['favourite'] : []),

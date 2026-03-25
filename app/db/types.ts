@@ -59,6 +59,7 @@ export interface RecommendedRecipe {
   recipe: Recipe;
   reason: string;
   why_this_recipe?: string;
+  why_this_recipe_points?: string[];
   tags: string[];
   availability: {
     total: number;
