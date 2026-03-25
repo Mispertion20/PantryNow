@@ -7,22 +7,34 @@ import { initDB } from './db';
 function RootNavigator() {
   const router = useRouter();
   const segments = useSegments();
-  const { isAuthenticated, loading } = useAuthContext();
+  const { isAuthenticated, loading, user } = useAuthContext();
 
   useEffect(() => {
     if (loading) return;
 
     const inAuthRoute = segments[0] === '(auth)';
+    const inSurveyRoute = segments[0] === 'survey';
+    const surveyCompleted = !!user?.survey_completed;
 
     if (!isAuthenticated && !inAuthRoute) {
-      router.replace('/login');
+      router.replace('/(auth)/login');
+      return;
+    }
+
+    if (isAuthenticated && !surveyCompleted && !inSurveyRoute) {
+      router.replace('/survey');
+      return;
+    }
+
+    if (isAuthenticated && surveyCompleted && inSurveyRoute) {
+      router.replace('/products');
       return;
     }
 
     if (isAuthenticated && inAuthRoute) {
-      router.replace('/products');
+      router.replace(surveyCompleted ? '/products' : '/survey');
     }
-  }, [isAuthenticated, loading, segments, router]);
+  }, [isAuthenticated, loading, segments, router, user?.survey_completed]);
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }

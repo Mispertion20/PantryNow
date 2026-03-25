@@ -2,12 +2,13 @@ import { apiRequest } from '../lib/api';
 import type {
     Database,
     HistoryItem,
+    PersonalizationSurvey,
+    PersonalizationSurveyInput,
     Product,
     ProductUpdateInput,
     Recipe,
     RecipeIngredient,
     RecipeInput,
-    RecommendationGoal,
 } from './types';
 
 type ApiEntity<T> = {
@@ -79,21 +80,47 @@ const db: Database = {
 			method: 'DELETE',
 		});
 	},
-	getRecommendationGoal: async (): Promise<RecommendationGoal> => {
-		const response = await apiRequest<{ data: { recommendation_goal: RecommendationGoal } }>(
-			'/settings/recommendation-goal'
-		);
-		return response.data.recommendation_goal;
+	getPersonalizationSurvey: async (): Promise<{ surveyCompleted: boolean; survey: PersonalizationSurvey | null }> => {
+		const response = await apiRequest<{
+			data: {
+				survey_completed: boolean;
+				survey: PersonalizationSurvey | null;
+			};
+		}>('/settings/survey');
+
+		return {
+			surveyCompleted: !!response.data.survey_completed,
+			survey: response.data.survey,
+		};
 	},
-	updateRecommendationGoal: async (goal: RecommendationGoal): Promise<RecommendationGoal> => {
-		const response = await apiRequest<{ data: { recommendation_goal: RecommendationGoal } }>(
-			'/settings/recommendation-goal',
-			{
-				method: 'PUT',
-				body: { recommendation_goal: goal },
-			}
-		);
-		return response.data.recommendation_goal;
+	updatePersonalizationSurvey: async (
+		survey: PersonalizationSurveyInput
+	): Promise<{ surveyCompleted: boolean; survey: PersonalizationSurvey }> => {
+		const response = await apiRequest<{
+			data: {
+				survey_completed: boolean;
+				survey: PersonalizationSurvey;
+			};
+		}>('/settings/survey', {
+			method: 'PUT',
+			body: { survey },
+		});
+
+		return {
+			surveyCompleted: !!response.data.survey_completed,
+			survey: response.data.survey,
+		};
+	},
+	getCustomInstructions: async (): Promise<string> => {
+		const response = await apiRequest<{ data: { custom_instructions: string } }>('/settings/custom-instructions');
+		return String(response.data.custom_instructions || '');
+	},
+	updateCustomInstructions: async (text: string): Promise<string> => {
+		const response = await apiRequest<{ data: { custom_instructions: string } }>('/settings/custom-instructions', {
+			method: 'PUT',
+			body: { custom_instructions: text },
+		});
+		return String(response.data.custom_instructions || '');
 	},
 	cookRecipe: async (
 		recipeId: number,
@@ -151,8 +178,10 @@ export const deleteRecipe = db.deleteRecipe;
 export const getLikedRecipes = db.getLikedRecipes;
 export const likeRecipe = db.likeRecipe;
 export const unlikeRecipe = db.unlikeRecipe;
-export const getRecommendationGoal = db.getRecommendationGoal;
-export const updateRecommendationGoal = db.updateRecommendationGoal;
+export const getPersonalizationSurvey = db.getPersonalizationSurvey;
+export const updatePersonalizationSurvey = db.updatePersonalizationSurvey;
+export const getCustomInstructions = db.getCustomInstructions;
+export const updateCustomInstructions = db.updateCustomInstructions;
 export const cookRecipe = db.cookRecipe;
 export const getCookingHistory = db.getCookingHistory;
 export const getRecipeIngredients = db.getRecipeIngredients;

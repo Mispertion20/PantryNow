@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { PersonalizationSurvey } from '../db/types';
 
 const TOKEN_KEY = 'pantrynow_auth_token';
 const USER_KEY = 'pantrynow_auth_user';
@@ -8,6 +9,9 @@ export type AuthUser = {
   name: string;
   email: string;
   avatar_data?: string;
+  custom_instructions?: string;
+  survey_completed?: boolean;
+  personalization_survey?: PersonalizationSurvey | null;
 };
 
 export const saveAuthSession = async (token: string, user: AuthUser): Promise<void> => {

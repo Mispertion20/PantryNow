@@ -75,6 +75,24 @@ export default function TabsLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="survey-retake"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="allergy-settings"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="custom-instructions"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

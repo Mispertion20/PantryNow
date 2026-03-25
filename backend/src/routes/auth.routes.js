@@ -12,6 +12,9 @@ const buildAuthPayload = (user) => ({
   name: user.name || '',
   email: user.email,
   avatar_data: user.avatar_data || '',
+  custom_instructions: user.customInstructions || '',
+  survey_completed: !!user.surveyCompleted,
+  personalization_survey: user.personalizationSurvey || null,
 });
 
 const createToken = (user) => {
@@ -57,6 +60,20 @@ router.post('/register', async (req, res) => {
       email: normalizedEmail,
       passwordHash,
       avatar_data: '',
+      customInstructions: '',
+      surveyCompleted: false,
+      personalizationSurvey: {
+        mainGoals: [],
+        dietChanges: [],
+        restrictions: ['no-restrictions'],
+        allergies: [],
+        otherRestriction: '',
+        cookingTime: '',
+        activityLevel: '',
+        mealPattern: '',
+        priorities: [],
+        updatedAt: null,
+      },
     });
 
     const token = createToken(user);

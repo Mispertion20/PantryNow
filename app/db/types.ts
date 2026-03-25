@@ -53,7 +53,57 @@ export interface ProductUpdateInput {
   unit?: string;
 }
 
-export type RecommendationGoal = 'deficit' | 'surplus' | 'neutral';
+export type SurveyMainGoal =
+  | 'improve-overall-health'
+  | 'reduce-weight'
+  | 'gain-weight-muscle'
+  | 'increase-energy-productivity'
+  | 'improve-skin-hair'
+  | 'eat-more-consciously';
+
+export type SurveyDietChange =
+  | 'eat-more-vegetables-fruits'
+  | 'reduce-sugar'
+  | 'limit-fatty-foods'
+  | 'cut-down-fast-food'
+  | 'increase-protein'
+  | 'drink-more-water'
+  | 'eat-regularly';
+
+export type SurveyRestriction =
+  | 'vegetarian'
+  | 'vegan'
+  | 'halal'
+  | 'lactose-free'
+  | 'gluten-free'
+  | 'no-restrictions'
+  | 'other';
+
+export type SurveyCookingTime = 'minimum' | 'medium' | 'long';
+export type SurveyActivityLevel = 'low' | 'medium' | 'high';
+export type SurveyMealPattern = 'irregular' | '2-3' | '3-4' | 'often-snack';
+
+export type SurveyPriority =
+  | 'fast-cooking'
+  | 'availability-of-products'
+  | 'taste'
+  | 'health-benefits'
+  | 'calorie-reduction';
+
+export interface PersonalizationSurvey {
+  mainGoals: SurveyMainGoal[];
+  dietChanges: SurveyDietChange[];
+  restrictions: SurveyRestriction[];
+  allergies: string[];
+  otherRestriction: string;
+  cookingTime: SurveyCookingTime | '';
+  activityLevel: SurveyActivityLevel | '';
+  mealPattern: SurveyMealPattern | '';
+  priorities: SurveyPriority[];
+  updatedAt?: string | null;
+}
+
+export type PersonalizationSurveyInput = Omit<PersonalizationSurvey, 'updatedAt'>;
 
 export interface RecommendedRecipe {
   recipe: Recipe;
@@ -101,8 +151,12 @@ export interface Database {
   getLikedRecipes(): Promise<Recipe[]>;
   likeRecipe(recipeId: number): Promise<void>;
   unlikeRecipe(recipeId: number): Promise<void>;
-  getRecommendationGoal(): Promise<RecommendationGoal>;
-  updateRecommendationGoal(goal: RecommendationGoal): Promise<RecommendationGoal>;
+  getPersonalizationSurvey(): Promise<{ surveyCompleted: boolean; survey: PersonalizationSurvey | null }>;
+  updatePersonalizationSurvey(
+    survey: PersonalizationSurveyInput
+  ): Promise<{ surveyCompleted: boolean; survey: PersonalizationSurvey }>;
+  getCustomInstructions(): Promise<string>;
+  updateCustomInstructions(text: string): Promise<string>;
   cookRecipe(
     recipeId: number,
     usedIngredients?: { productName: string; amountUsed: number }[]

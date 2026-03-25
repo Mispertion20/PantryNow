@@ -12,6 +12,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAppContext } from '../context/AppContext';
 import { useAuthContext } from '../context/AuthContext';
 import * as db from '../db';
@@ -39,6 +40,7 @@ export default function ProfileScreen() {
   const [draftName, setDraftName] = useState(user?.name ?? '');
   const [savingName, setSavingName] = useState(false);
   const [updatingAvatar, setUpdatingAvatar] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     setDraftName(user?.name ?? '');
@@ -160,16 +162,13 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: () => {
-          void logout();
-        },
-      },
-    ]);
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await logout();
+    router.replace('/(auth)/login');
   };
 
   return (
@@ -246,6 +245,19 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Statistics</Text>
       </View>
+
+      <ConfirmDialog
+        visible={showLogoutConfirm}
+        title="Log out"
+        message="Are you sure you want to log out?"
+        confirmText="Log out"
+        cancelText="Cancel"
+        isDangerous
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          void confirmLogout();
+        }}
+      />
 
       <View style={styles.statsGrid}>
         <View style={styles.statBox}>

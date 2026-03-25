@@ -20,6 +20,24 @@ const ALLOWED_TAGS = [
 
 const ALLOWED_RECOMMENDATION_GOALS = new Set(['deficit', 'surplus', 'neutral']);
 
+const SURVEY_DEFAULT = {
+  mainGoals: [],
+  dietChanges: [],
+  restrictions: ['no-restrictions'],
+  allergies: [],
+  otherRestriction: '',
+  cookingTime: '',
+  activityLevel: '',
+  mealPattern: '',
+  priorities: [],
+};
+
+const NON_VEGETARIAN_KEYWORDS = ['chicken', 'beef', 'pork', 'turkey', 'fish', 'salmon', 'tuna', 'shrimp', 'bacon'];
+const NON_VEGAN_KEYWORDS = ['egg', 'milk', 'cheese', 'butter', 'yogurt', 'cream', 'honey', 'mayo', 'mayonnaise'];
+const NON_HALAL_KEYWORDS = ['pork', 'bacon', 'ham', 'wine', 'beer', 'alcohol'];
+const LACTOSE_KEYWORDS = ['milk', 'cheese', 'butter', 'cream', 'yogurt'];
+const GLUTEN_KEYWORDS = ['wheat', 'flour', 'bread', 'pasta', 'spaghetti', 'noodle'];
+
 const NUTRITION_KEYWORDS = [
   { keys: ['egg'], caloriesPer100g: 155, proteinPer100g: 13, fatsPer100g: 11, carbsPer100g: 1.1 },
   { keys: ['chicken', 'turkey'], caloriesPer100g: 165, proteinPer100g: 31, fatsPer100g: 3.6, carbsPer100g: 0 },
@@ -137,6 +155,86 @@ const chooseUnitForIngredient = (ingredientName, pantryMap, fallbackUnit = 'g') 
   return fallbackUnit;
 };
 
+const normalizeSurveyProfile = (survey) => {
+  const safe = survey && typeof survey === 'object' ? survey : SURVEY_DEFAULT;
+  const toStringArray = (value, fallback = []) => {
+    if (!Array.isArray(value)) return fallback;
+    return value.map((item) => String(item || '').trim().toLowerCase()).filter(Boolean);
+  };
+
+  const restrictions = toStringArray(safe.restrictions, ['no-restrictions']);
+  return {
+    mainGoals: toStringArray(safe.mainGoals),
+    dietChanges: toStringArray(safe.dietChanges),
+    restrictions: restrictions.length > 0 ? restrictions : ['no-restrictions'],
+    allergies: toStringArray(safe.allergies),
+    otherRestriction: String(safe.otherRestriction || '').trim(),
+    cookingTime: String(safe.cookingTime || '').trim().toLowerCase(),
+    activityLevel: String(safe.activityLevel || '').trim().toLowerCase(),
+    mealPattern: String(safe.mealPattern || '').trim().toLowerCase(),
+    priorities: toStringArray(safe.priorities),
+  };
+};
+
+const deriveRecommendationGoalFromSurvey = (surveyProfile, fallbackGoal) => {
+  const fallback = ALLOWED_RECOMMENDATION_GOALS.has(fallbackGoal) ? fallbackGoal : 'neutral';
+  if (!surveyProfile) return fallback;
+
+  if (
+    surveyProfile.mainGoals.includes('reduce-weight') ||
+    surveyProfile.priorities.includes('calorie-reduction')
+  ) {
+    return 'deficit';
+  }
+
+  if (surveyProfile.mainGoals.includes('gain-weight-muscle')) {
+    return 'surplus';
+  }
+
+  return fallback;
+};
+
+const hasKeywordMatch = (ingredientNames, keywords) => {
+  return ingredientNames.some((name) => keywords.some((keyword) => name.includes(keyword)));
+};
+
+const isRecipeRestricted = (ingredientNames, restrictions) => {
+  if (!Array.isArray(restrictions) || restrictions.includes('no-restrictions')) {
+    return false;
+  }
+
+  if (restrictions.includes('vegetarian') && hasKeywordMatch(ingredientNames, NON_VEGETARIAN_KEYWORDS)) {
+    return true;
+  }
+  if (restrictions.includes('vegan') && (
+    hasKeywordMatch(ingredientNames, NON_VEGETARIAN_KEYWORDS) ||
+    hasKeywordMatch(ingredientNames, NON_VEGAN_KEYWORDS)
+  )) {
+    return true;
+  }
+  if (restrictions.includes('halal') && hasKeywordMatch(ingredientNames, NON_HALAL_KEYWORDS)) {
+    return true;
+  }
+  if (restrictions.includes('lactose-free') && hasKeywordMatch(ingredientNames, LACTOSE_KEYWORDS)) {
+    return true;
+  }
+  if (restrictions.includes('gluten-free') && hasKeywordMatch(ingredientNames, GLUTEN_KEYWORDS)) {
+    return true;
+  }
+
+  return false;
+};
+
+const hasAllergyMatch = (ingredientNames, allergies) => {
+  if (!Array.isArray(allergies) || allergies.length === 0) {
+    return false;
+  }
+
+  return ingredientNames.some((ingredient) =>
+    allergies.some((allergy) => ingredient.includes(allergy) || allergy.includes(ingredient))
+  );
+};
+
 const buildReadableRecommendationReasons = ({
   recipeTitle,
   recommendationGoal,
@@ -240,7 +338,7 @@ router.post('/recommendations', async (req, res) => {
       }).sort({ id: 1 }),
       CookingHistory.find({ ownerId }).sort({ cooked_at: -1 }).limit(30),
       RecipeIngredient.find({}),
-      User.findById(ownerId).select({ likedRecipeIds: 1, recommendationGoal: 1, _id: 0 }),
+      User.findById(ownerId).select({ likedRecipeIds: 1, recommendationGoal: 1, personalizationSurvey: 1, customInstructions: 1, _id: 0 }),
     ]);
 
     if (recipes.length === 0) {
@@ -285,9 +383,12 @@ router.post('/recommendations', async (req, res) => {
     }
 
     const likedRecipeIds = Array.isArray(user?.likedRecipeIds) ? user.likedRecipeIds : [];
-    const recommendationGoal = ALLOWED_RECOMMENDATION_GOALS.has(user?.recommendationGoal)
-      ? user.recommendationGoal
-      : 'neutral';
+    const surveyProfile = normalizeSurveyProfile(user?.personalizationSurvey);
+    const customInstructions = String(user?.customInstructions || '').trim();
+    const recommendationGoal = deriveRecommendationGoalFromSurvey(
+      surveyProfile,
+      user?.recommendationGoal
+    );
 
     const recipeIngredientsById = new Map();
     for (const recipe of recipeCatalogue) {
@@ -347,10 +448,19 @@ Recommendation priorities (in order):
   - if previous meal was heavy -> recommend lighter meals
   - if previous meal was light -> recommend more filling meals
   - if previous meal was balanced -> keep recommendations balanced
-8. **User goal personalization** — user's saved goal is "${recommendationGoal}":
+8. **User goal personalization** — inferred nutrition direction is "${recommendationGoal}" based on survey:
   - deficit -> prioritize lighter/lower-calorie options
   - surplus -> prioritize more filling/higher-calorie options
   - neutral -> keep balanced recommendations
+9. **Survey profile constraints** — always respect user survey preferences:
+  - restrictions: ${surveyProfile.restrictions.join(', ')}
+  - cooking time preference: ${surveyProfile.cookingTime || 'not specified'}
+  - priorities: ${surveyProfile.priorities.join(', ') || 'not specified'}
+  - diet changes: ${surveyProfile.dietChanges.join(', ') || 'not specified'}
+10. **Custom instructions** — user's explicit instructions:
+  ${customInstructions || 'None provided.'}
+
+When custom instructions are provided, follow them if they do not conflict with safety, allergy/restriction rules, or pantry reality.
 
 Important meal-time rule:
 - If current_meal_time is lunch or dinner, avoid breakfast-heavy recipes unless there are very few suitable alternatives.
@@ -396,6 +506,8 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
       frequency: frequencyMap,
       liked_recipe_ids: likedRecipeIds,
       recommendation_goal: recommendationGoal,
+      personalization_survey: surveyProfile,
+      custom_instructions: customInstructions,
       previous_meal_nutrition: previousMealNutrition,
       next_meal_target: nextMealTarget,
     });
@@ -528,9 +640,29 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
         const recipeIngredientNames = recipeIngredients
           .map((ingredient) => String(ingredient.name || '').trim().toLowerCase())
           .filter(Boolean);
+        const restricted =
+          isRecipeRestricted(recipeIngredientNames, surveyProfile.restrictions) ||
+          hasAllergyMatch(recipeIngredientNames, surveyProfile.allergies);
         const topTasteMatches = recipeIngredientNames
           .filter((name) => topFavoriteIngredients.includes(name))
           .slice(0, 3);
+
+        if (restricted) {
+          adjustedScore -= 150;
+        }
+
+        const prefersFastCooking =
+          surveyProfile.cookingTime === 'minimum' ||
+          surveyProfile.priorities.includes('fast-cooking');
+
+        if (prefersFastCooking) {
+          if (entry.recipe.cooking_time <= 15) adjustedScore += 14;
+          if (entry.recipe.cooking_time > 40) adjustedScore -= 10;
+        }
+
+        if (surveyProfile.priorities.includes('availability-of-products') && isPantryReady) {
+          adjustedScore += 10;
+        }
 
         const { shortReason, points: whyThisRecipePoints } = buildReadableRecommendationReasons({
           recipeTitle: entry.recipe.title,
@@ -560,11 +692,13 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
             ...(nextMealTarget.target === 'lighter' && recipeFillingScore <= 45 ? ['quick-meal'] : []),
           ])).filter((tag) => ALLOWED_TAGS.includes(tag)).slice(0, 3),
           score: Math.max(0, Math.min(100, adjustedScore)),
+          restricted,
         };
       })
+      .filter((entry) => !entry.restricted)
       .sort((a, b) => b.score - a.score)
       .slice(0, 6)
-      .map(({ score: _score, ...entryWithoutScore }) => entryWithoutScore);
+      .map(({ score: _score, restricted: _restricted, ...entryWithoutScore }) => entryWithoutScore);
 
     return res.status(200).json({
       data: {
@@ -600,7 +734,7 @@ router.post('/shopping-recommendations', async (req, res) => {
       }).sort({ id: 1 }),
       CookingHistory.find({ ownerId }).sort({ cooked_at: -1 }).limit(30),
       RecipeIngredient.find({}),
-      User.findById(ownerId).select({ likedRecipeIds: 1, recommendationGoal: 1, _id: 0 }),
+      User.findById(ownerId).select({ likedRecipeIds: 1, recommendationGoal: 1, personalizationSurvey: 1, _id: 0 }),
     ]);
 
     if (recipes.length === 0) {
@@ -612,9 +746,11 @@ router.post('/shopping-recommendations', async (req, res) => {
       });
     }
 
-    const recommendationGoal = ALLOWED_RECOMMENDATION_GOALS.has(user?.recommendationGoal)
-      ? user.recommendationGoal
-      : 'neutral';
+    const surveyProfile = normalizeSurveyProfile(user?.personalizationSurvey);
+    const recommendationGoal = deriveRecommendationGoalFromSurvey(
+      surveyProfile,
+      user?.recommendationGoal
+    );
     const likedRecipeIds = new Set(Array.isArray(user?.likedRecipeIds) ? user.likedRecipeIds : []);
 
     const pantryMap = new Map(
@@ -698,6 +834,14 @@ router.post('/shopping-recommendations', async (req, res) => {
         const ingredientName = normalizeIngredientName(ingredient.product_name);
         if (!ingredientName) continue;
 
+        if (isRecipeRestricted([ingredientName], surveyProfile.restrictions)) {
+          continue;
+        }
+
+        if (hasAllergyMatch([ingredientName], surveyProfile.allergies)) {
+          continue;
+        }
+
         const requiredAmount = Number(ingredient.amount_required || 0);
         if (!Number.isFinite(requiredAmount) || requiredAmount <= 0) continue;
 
@@ -776,7 +920,7 @@ router.post('/shopping-recommendations', async (req, res) => {
       .slice(0, 8);
 
     const reasoning = suggestions.length > 0
-      ? `These buy suggestions are ranked from your pantry gaps, favorite and frequent recipes, meal-time context (${mealTime}), and your ${recommendationGoal} goal.`
+      ? `These buy suggestions are ranked from pantry gaps plus your full survey profile (goals, restrictions, cooking time, priorities), favorite recipes, and meal-time context (${mealTime}).`
       : 'Your pantry already covers most high-priority ingredients. No urgent purchases are needed right now.';
 
     return res.status(200).json({

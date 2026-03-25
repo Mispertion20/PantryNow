@@ -34,7 +34,7 @@ export default function RegisterScreen() {
     try {
       setSubmitting(true);
       await register(name.trim(), email.trim().toLowerCase(), password);
-      router.replace('/products');
+      router.replace('/survey');
     } catch (error) {
       Alert.alert('Registration failed', error instanceof Error ? error.message : 'Please try again.');
     } finally {

@@ -1,154 +1,131 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Button } from '../components/Button';
-import * as db from '../db';
-import type { RecommendationGoal } from '../db/types';
-
-const GOAL_OPTIONS: {
-  value: RecommendationGoal;
-  title: string;
-  subtitle: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-}[] = [
-  {
-    value: 'deficit',
-    title: 'Calorie Deficit (Diet Mode)',
-    subtitle: 'Prioritize lighter recommendations with lower estimated filling score.',
-    icon: 'trending-down-outline',
-    color: '#43A047',
-  },
-  {
-    value: 'surplus',
-    title: 'Calorie Surplus (Bulking Mode)',
-    subtitle: 'Prioritize more filling recommendations with higher estimated calories.',
-    icon: 'barbell-outline',
-    color: '#FB8C00',
-  },
-  {
-    value: 'neutral',
-    title: 'Neutral / Casual Cooking',
-    subtitle: 'Balanced recommendations without strong calorie target bias.',
-    icon: 'restaurant-outline',
-    color: '#5E35B1',
-  },
-];
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useAuthContext } from '../context/AuthContext';
 
 export default function SettingsScreen() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [currentGoal, setCurrentGoal] = useState<RecommendationGoal>('neutral');
-  const [selectedGoal, setSelectedGoal] = useState<RecommendationGoal>('neutral');
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const router = useRouter();
+  const { logout } = useAuthContext();
+  const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const goal = await db.getRecommendationGoal();
-        setCurrentGoal(goal);
-        setSelectedGoal(goal);
-      } catch (error) {
-        console.error('Failed to load recommendation goal:', error);
-        Alert.alert('Error', 'Failed to load your personalization settings.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, []);
-
-  const handleSave = async () => {
-    if (selectedGoal === currentGoal) {
-      return;
-    }
-
-    try {
-      setSaving(true);
-      const savedGoal = await db.updateRecommendationGoal(selectedGoal);
-      setCurrentGoal(savedGoal);
-      setSelectedGoal(savedGoal);
-      setSaveMessage('Saved successfully. New recommendations will use this goal.');
-    } catch (error) {
-      console.error('Failed to save recommendation goal:', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to save settings.');
-    } finally {
-      setSaving(false);
-    }
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await logout();
+    router.replace('/(auth)/login');
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#FF6347" />
-      </View>
-    );
-  }
+  const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
-        <Text style={styles.subtitle}>Personalization Goal</Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recommendation Goal</Text>
-        <Text style={styles.sectionDescription}>
-          This goal is stored per account and is always applied to AI recommendations.
-        </Text>
-
-        <View style={styles.currentGoalCard}>
-          <Ionicons name="information-circle-outline" size={18} color="#5E35B1" />
-          <Text style={styles.currentGoalText}>
-            Current goal: <Text style={styles.currentGoalValue}>{GOAL_OPTIONS.find((goal) => goal.value === currentGoal)?.title || 'Neutral / Casual Cooking'}</Text>
-          </Text>
-        </View>
-
-        {GOAL_OPTIONS.map((option) => {
-          const selected = selectedGoal === option.value;
-          return (
-            <TouchableOpacity
-              key={option.value}
-              style={[styles.goalCard, selected && styles.goalCardSelected]}
-              onPress={() => setSelectedGoal(option.value)}
-              activeOpacity={0.85}
-            >
-              <View style={[styles.goalIconWrap, { backgroundColor: `${option.color}20` }]}>
-                <Ionicons name={option.icon} size={22} color={option.color} />
-              </View>
-
-              <View style={styles.goalTextWrap}>
-                <Text style={styles.goalTitle}>{option.title}</Text>
-                <Text style={styles.goalSubtitle}>{option.subtitle}</Text>
-              </View>
-
-              <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
-                {selected ? <View style={styles.radioInner} /> : null}
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-
-        {saveMessage ? (
-          <View style={styles.successMessageWrap}>
-            <Ionicons name="checkmark-circle" size={16} color="#43A047" />
-            <Text style={styles.successMessageText}>{saveMessage}</Text>
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.footer}>
-        <Button
-          title={saving ? 'Saving...' : 'Save Goal'}
+        <TouchableOpacity
+          style={styles.backButton}
           onPress={() => {
-            void handleSave();
+            router.replace('/(tabs)');
           }}
-          disabled={saving || selectedGoal === currentGoal}
-        />
+        >
+          <Ionicons name="chevron-back" size={20} color="#333" />
+          <Text style={styles.backText}>Home</Text>
+        </TouchableOpacity>
       </View>
-    </ScrollView>
+
+      <View style={styles.content}>
+        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.subtitle}>Manage your AI personalization preferences.</Text>
+
+        <TouchableOpacity
+          style={styles.actionCard}
+          activeOpacity={0.88}
+          onPress={() => {
+            router.push('/(tabs)/survey-retake');
+          }}
+        >
+          <View style={styles.actionIconWrap}>
+            <Ionicons name="sparkles-outline" size={22} color="#6A1B9A" />
+          </View>
+          <View style={styles.actionTextWrap}>
+            <Text style={styles.actionTitle}>Retake personalization survey</Text>
+            <Text style={styles.actionSubtitle}>
+              Update goals, restrictions, cooking style and priorities.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#999" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionCard}
+          activeOpacity={0.88}
+          onPress={() => {
+            router.push('/(tabs)/allergy-settings');
+          }}
+        >
+          <View style={[styles.actionIconWrap, styles.allergyIconWrap]}>
+            <Ionicons name="warning-outline" size={22} color="#B42318" />
+          </View>
+          <View style={styles.actionTextWrap}>
+            <Text style={styles.actionTitle}>Manage allergy ingredients</Text>
+            <Text style={styles.actionSubtitle}>
+              Add or remove allergy names without retaking the full survey.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#999" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionCard}
+          activeOpacity={0.88}
+          onPress={() => {
+            router.push('/(tabs)/custom-instructions');
+          }}
+        >
+          <View style={[styles.actionIconWrap, styles.instructionsIconWrap]}>
+            <Ionicons name="chatbox-ellipses-outline" size={22} color="#155EEF" />
+          </View>
+          <View style={styles.actionTextWrap}>
+            <Text style={styles.actionTitle}>Custom instructions</Text>
+            <Text style={styles.actionSubtitle}>
+              Write specific guidance for AI recommendations.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#999" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionCard, styles.logoutCard]}
+          activeOpacity={0.88}
+          onPress={handleLogout}
+        >
+          <View style={[styles.actionIconWrap, styles.logoutIconWrap]}>
+            <Ionicons name="log-out-outline" size={22} color="#B42318" />
+          </View>
+          <View style={styles.actionTextWrap}>
+            <Text style={styles.actionTitle}>Log out</Text>
+            <Text style={styles.actionSubtitle}>
+              Sign out from your PantryNow account.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#999" />
+        </TouchableOpacity>
+      </View>
+
+      <ConfirmDialog
+        visible={showLogoutConfirm}
+        title="Log out"
+        message="Are you sure you want to log out?"
+        confirmText="Log out"
+        cancelText="Cancel"
+        isDangerous
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          void confirmLogout();
+        }}
+      />
+    </View>
   );
 }
 
@@ -157,142 +134,86 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  contentContainer: {
-    paddingBottom: 24,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
   header: {
     backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 2,
+    paddingVertical: 4,
+    paddingRight: 8,
+  },
+  backText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '700',
+    color: '#222',
   },
   subtitle: {
-    marginTop: 2,
+    marginTop: 4,
     fontSize: 14,
     color: '#777',
   },
-  section: {
-    marginTop: 14,
-    paddingHorizontal: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-  },
-  sectionDescription: {
-    marginTop: 4,
-    marginBottom: 12,
-    fontSize: 13,
-    color: '#777',
-    lineHeight: 18,
-  },
-  currentGoalCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#F3E5F5',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-  },
-  currentGoalText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#5E35B1',
-    lineHeight: 18,
-  },
-  currentGoalValue: {
-    fontWeight: '700',
-  },
-  goalCard: {
-    backgroundColor: '#fff',
+  actionCard: {
+    marginTop: 18,
     borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#efefef',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
     elevation: 1,
   },
-  goalCardSelected: {
-    borderColor: '#FF6347',
-    backgroundColor: '#FFF8F6',
-  },
-  goalIconWrap: {
+  actionIconWrap: {
     width: 42,
     height: 42,
     borderRadius: 21,
+    backgroundColor: '#F3E5F5',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
-  },
-  goalTextWrap: {
-    flex: 1,
     marginRight: 10,
   },
-  goalTitle: {
-    fontSize: 14,
+  allergyIconWrap: {
+    backgroundColor: '#FEECE8',
+  },
+  instructionsIconWrap: {
+    backgroundColor: '#EAF2FF',
+  },
+  logoutCard: {
+    marginTop: 14,
+  },
+  logoutIconWrap: {
+    backgroundColor: '#FEECE8',
+  },
+  actionTextWrap: {
+    flex: 1,
+    marginRight: 8,
+  },
+  actionTitle: {
+    fontSize: 15,
     fontWeight: '700',
     color: '#333',
-    marginBottom: 2,
   },
-  goalSubtitle: {
+  actionSubtitle: {
+    marginTop: 2,
     fontSize: 12,
     color: '#777',
     lineHeight: 17,
-  },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: '#ccc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioOuterSelected: {
-    borderColor: '#FF6347',
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FF6347',
-  },
-  footer: {
-    marginTop: 8,
-    paddingHorizontal: 16,
-  },
-  successMessageWrap: {
-    marginTop: 6,
-    marginBottom: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#E8F5E9',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  successMessageText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#2E7D32',
   },
 });
