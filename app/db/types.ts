@@ -53,6 +53,8 @@ export interface ProductUpdateInput {
   unit?: string;
 }
 
+export type RecommendationGoal = 'deficit' | 'surplus' | 'neutral';
+
 export interface RecommendedRecipe {
   recipe: Recipe;
   reason: string;
@@ -82,6 +84,8 @@ export interface Database {
   getLikedRecipes(): Promise<Recipe[]>;
   likeRecipe(recipeId: number): Promise<void>;
   unlikeRecipe(recipeId: number): Promise<void>;
+  getRecommendationGoal(): Promise<RecommendationGoal>;
+  updateRecommendationGoal(goal: RecommendationGoal): Promise<RecommendationGoal>;
   cookRecipe(
     recipeId: number,
     usedIngredients?: { productName: string; amountUsed: number }[]

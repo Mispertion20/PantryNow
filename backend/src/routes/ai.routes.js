@@ -18,6 +18,8 @@ const ALLOWED_TAGS = [
   'new-discovery',
 ];
 
+const ALLOWED_RECOMMENDATION_GOALS = new Set(['deficit', 'surplus', 'neutral']);
+
 const NUTRITION_KEYWORDS = [
   { keys: ['egg'], caloriesPer100g: 155, proteinPer100g: 13, fatsPer100g: 11, carbsPer100g: 1.1 },
   { keys: ['chicken', 'turkey'], caloriesPer100g: 165, proteinPer100g: 31, fatsPer100g: 3.6, carbsPer100g: 0 },
@@ -129,7 +131,7 @@ router.post('/recommendations', async (req, res) => {
       }).sort({ id: 1 }),
       CookingHistory.find({ ownerId }).sort({ cooked_at: -1 }).limit(30),
       RecipeIngredient.find({}),
-      User.findById(ownerId).select({ likedRecipeIds: 1, _id: 0 }),
+      User.findById(ownerId).select({ likedRecipeIds: 1, recommendationGoal: 1, _id: 0 }),
     ]);
 
     if (recipes.length === 0) {
@@ -174,6 +176,9 @@ router.post('/recommendations', async (req, res) => {
     }
 
     const likedRecipeIds = Array.isArray(user?.likedRecipeIds) ? user.likedRecipeIds : [];
+    const recommendationGoal = ALLOWED_RECOMMENDATION_GOALS.has(user?.recommendationGoal)
+      ? user.recommendationGoal
+      : 'neutral';
 
     const recipeIngredientsById = new Map();
     for (const recipe of recipeCatalogue) {
@@ -233,6 +238,10 @@ Recommendation priorities (in order):
   - if previous meal was heavy -> recommend lighter meals
   - if previous meal was light -> recommend more filling meals
   - if previous meal was balanced -> keep recommendations balanced
+8. **User goal personalization** — user's saved goal is "${recommendationGoal}":
+  - deficit -> prioritize lighter/lower-calorie options
+  - surplus -> prioritize more filling/higher-calorie options
+  - neutral -> keep balanced recommendations
 
 Important meal-time rule:
 - If current_meal_time is lunch or dinner, avoid breakfast-heavy recipes unless there are very few suitable alternatives.
@@ -277,6 +286,7 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
       cooking_history: historyList,
       frequency: frequencyMap,
       liked_recipe_ids: likedRecipeIds,
+      recommendation_goal: recommendationGoal,
       previous_meal_nutrition: previousMealNutrition,
       next_meal_target: nextMealTarget,
     });
@@ -350,6 +360,9 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
         const recipeIngredients = recipeIngredientsById.get(entry.recipe.id) || [];
         const recipeNutrition = estimateTotalsFromIngredients(recipeIngredients);
         const recipeFillingScore = getFillingScore(recipeNutrition);
+        const isPantryReady =
+          entry.availability.total > 0 &&
+          entry.availability.available >= entry.availability.total;
 
         let adjustedScore = Number(entry.score) || 0;
 
@@ -373,18 +386,35 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
           if (recipeFillingScore <= 35) adjustedScore -= 10;
         }
 
+        if (recommendationGoal === 'deficit') {
+          if (recipeFillingScore <= 45) adjustedScore += 16;
+          if (recipeFillingScore >= 65) adjustedScore -= 14;
+        } else if (recommendationGoal === 'surplus') {
+          if (recipeFillingScore >= 60) adjustedScore += 16;
+          if (recipeFillingScore <= 35) adjustedScore -= 10;
+        }
+
         const mealContextReasonPrefix = nextMealTarget.target === 'lighter'
           ? 'Suggested as a lighter follow-up to your previous heavy meal.'
           : nextMealTarget.target === 'filling'
             ? 'Suggested as a more filling follow-up to your previous light meal.'
             : 'Suggested as a balanced follow-up to your previous meal.';
 
+        const goalReasonPrefix = recommendationGoal === 'deficit'
+          ? 'Aligned with your calorie-deficit goal.'
+          : recommendationGoal === 'surplus'
+            ? 'Aligned with your calorie-surplus goal.'
+            : 'Aligned with your neutral cooking mode.';
+
+        const aiSafeTags = entry.tags.filter((tag) => tag !== 'pantry-ready');
+
         return {
           ...entry,
-          reason: `${mealContextReasonPrefix} ${entry.reason}`.trim(),
+          reason: `${goalReasonPrefix} ${mealContextReasonPrefix} ${entry.reason}`.trim(),
           tags: Array.from(new Set([
-            ...entry.tags,
+            ...aiSafeTags,
             ...(isLiked ? ['favourite'] : []),
+            ...(isPantryReady ? ['pantry-ready'] : []),
             ...(matchesMealTime ? ['meal-time-fit'] : []),
             ...(nextMealTarget.target === 'lighter' && recipeFillingScore <= 45 ? ['quick-meal'] : []),
           ])).filter((tag) => ALLOWED_TAGS.includes(tag)).slice(0, 3),

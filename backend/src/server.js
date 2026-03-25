@@ -9,6 +9,7 @@ import historyRoutes from './routes/history.routes.js';
 import productsRoutes from './routes/products.routes.js';
 import recipeIngredientsRoutes from './routes/recipeIngredients.routes.js';
 import recipesRoutes from './routes/recipes.routes.js';
+import settingsRoutes from './routes/settings.routes.js';
 import { seedGlobalRecipes } from './utils/seedGlobalRecipes.js';
 
 const app = express();
@@ -26,6 +27,7 @@ app.use('/api/recipes', requireAuth, recipesRoutes);
 app.use('/api/history', requireAuth, historyRoutes);
 app.use('/api/recipe-ingredients', requireAuth, recipeIngredientsRoutes);
 app.use('/api/ai', requireAuth, aiRoutes);
+app.use('/api/settings', requireAuth, settingsRoutes);
 
 app.use((error, _req, res, _next) => {
   res.status(500).json({ message: 'Unexpected server error', details: error.message });

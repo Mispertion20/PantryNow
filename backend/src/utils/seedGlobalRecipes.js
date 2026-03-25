@@ -2,6 +2,29 @@ import { Recipe } from '../models/Recipe.js';
 import { RecipeIngredient } from '../models/RecipeIngredient.js';
 import { getNextId } from './counter.js';
 
+const createIngredientWithRetry = async (recipeId, ingredientTemplate, maxRetries = 5) => {
+  let attempt = 0;
+
+  while (attempt < maxRetries) {
+    attempt += 1;
+    const ingredientId = await getNextId(null, 'recipe_ingredients');
+
+    try {
+      await RecipeIngredient.create({
+        id: ingredientId,
+        recipe_id: recipeId,
+        product_name: ingredientTemplate.product_name,
+        amount_required: ingredientTemplate.amount_required,
+      });
+      return;
+    } catch (error) {
+      if (error?.code !== 11000 || attempt >= maxRetries) {
+        throw error;
+      }
+    }
+  }
+};
+
 const globalRecipes = [
   {
     title: 'Classic Pancakes',
@@ -322,13 +345,7 @@ export const seedGlobalRecipes = async () => {
     await RecipeIngredient.deleteMany({ recipe_id: recipe.id });
 
     for (const ingredientTemplate of recipeTemplate.ingredients) {
-      const ingredientId = await getNextId(null, 'recipe_ingredients');
-      await RecipeIngredient.create({
-        id: ingredientId,
-        recipe_id: recipe.id,
-        product_name: ingredientTemplate.product_name,
-        amount_required: ingredientTemplate.amount_required,
-      });
+      await createIngredientWithRetry(recipe.id, ingredientTemplate);
     }
   }
 };

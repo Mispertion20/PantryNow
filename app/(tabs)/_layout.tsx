@@ -69,6 +69,12 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" color={color} size={size} />,
         }}
       />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

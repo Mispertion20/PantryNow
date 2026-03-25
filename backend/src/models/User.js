@@ -24,6 +24,11 @@ const userSchema = new mongoose.Schema(
       type: [Number],
       default: [],
     },
+    recommendationGoal: {
+      type: String,
+      enum: ['deficit', 'surplus', 'neutral'],
+      default: 'neutral',
+    },
   },
   {
     timestamps: true,

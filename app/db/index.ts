@@ -7,6 +7,7 @@ import type {
     Recipe,
     RecipeIngredient,
     RecipeInput,
+    RecommendationGoal,
 } from './types';
 
 type ApiEntity<T> = {
@@ -78,6 +79,22 @@ const db: Database = {
 			method: 'DELETE',
 		});
 	},
+	getRecommendationGoal: async (): Promise<RecommendationGoal> => {
+		const response = await apiRequest<{ data: { recommendation_goal: RecommendationGoal } }>(
+			'/settings/recommendation-goal'
+		);
+		return response.data.recommendation_goal;
+	},
+	updateRecommendationGoal: async (goal: RecommendationGoal): Promise<RecommendationGoal> => {
+		const response = await apiRequest<{ data: { recommendation_goal: RecommendationGoal } }>(
+			'/settings/recommendation-goal',
+			{
+				method: 'PUT',
+				body: { recommendation_goal: goal },
+			}
+		);
+		return response.data.recommendation_goal;
+	},
 	cookRecipe: async (
 		recipeId: number,
 		usedIngredients?: { productName: string; amountUsed: number }[]
@@ -134,6 +151,8 @@ export const deleteRecipe = db.deleteRecipe;
 export const getLikedRecipes = db.getLikedRecipes;
 export const likeRecipe = db.likeRecipe;
 export const unlikeRecipe = db.unlikeRecipe;
+export const getRecommendationGoal = db.getRecommendationGoal;
+export const updateRecommendationGoal = db.updateRecommendationGoal;
 export const cookRecipe = db.cookRecipe;
 export const getCookingHistory = db.getCookingHistory;
 export const getRecipeIngredients = db.getRecipeIngredients;
