@@ -3,6 +3,8 @@ import React from 'react';
 import {
     ActivityIndicator,
     Image,
+    Modal,
+    ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -66,6 +68,20 @@ export const AIRecommendationsList: React.FC<AIRecommendationsProps> = ({
   onCook,
   onViewRecipe,
 }) => {
+  const [selectedRecommendation, setSelectedRecommendation] = React.useState<RecommendedRecipe | null>(null);
+
+  const getWhyThisRecipeText = (rec: RecommendedRecipe): string => {
+    if (rec.why_this_recipe && rec.why_this_recipe.trim().length > 0) {
+      return rec.why_this_recipe;
+    }
+
+    const pantrySummary = rec.availability.total > 0
+      ? `Pantry fit: ${rec.availability.available}/${rec.availability.total} ingredients are available.`
+      : 'Pantry fit: this recipe has minimal tracked ingredient constraints.';
+
+    return `${rec.reason} ${pantrySummary} Priority factors: pantry availability, meal-time fit, your history/favorites, and your saved goal.`;
+  };
+
   if (loading) {
     return (
       <View style={styles.section}>
@@ -160,6 +176,17 @@ export const AIRecommendationsList: React.FC<AIRecommendationsProps> = ({
                 {rec.reason}
               </Text>
 
+              <TouchableOpacity
+                style={styles.whyButton}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  setSelectedRecommendation(rec);
+                }}
+              >
+                <Ionicons name="help-circle-outline" size={15} color="#6A1B9A" />
+                <Text style={styles.whyButtonText}>Why this recipe?</Text>
+              </TouchableOpacity>
+
               {rec.tags.length > 0 && (
                 <View style={styles.tagsRow}>
                   {rec.tags.map((tag) => (
@@ -204,6 +231,41 @@ export const AIRecommendationsList: React.FC<AIRecommendationsProps> = ({
           </TouchableOpacity>
         );
       })}
+
+      <Modal
+        visible={!!selectedRecommendation}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedRecommendation(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleWrap}>
+                <Ionicons name="bulb-outline" size={18} color="#6A1B9A" />
+                <Text style={styles.modalTitle}>Why this recipe?</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedRecommendation(null)} style={styles.modalCloseButton}>
+                <Ionicons name="close" size={18} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalRecipeName} numberOfLines={2}>
+              {selectedRecommendation?.recipe.title}
+            </Text>
+
+            <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
+              <Text style={styles.modalBodyText}>
+                {selectedRecommendation ? getWhyThisRecipeText(selectedRecommendation) : ''}
+              </Text>
+            </ScrollView>
+
+            <TouchableOpacity style={styles.modalActionButton} onPress={() => setSelectedRecommendation(null)}>
+              <Text style={styles.modalActionText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -340,7 +402,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     lineHeight: 18,
+    marginBottom: 6,
+  },
+  whyButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F3E5F5',
     marginBottom: 8,
+  },
+  whyButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6A1B9A',
   },
   tagsRow: {
     flexDirection: 'row',
@@ -413,5 +491,65 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#fff',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    maxHeight: '70%',
+    padding: 14,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#6A1B9A',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalRecipeName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 10,
+  },
+  modalScroll: {
+    maxHeight: 280,
+  },
+  modalScrollContent: {
+    paddingBottom: 8,
+  },
+  modalBodyText: {
+    fontSize: 13,
+    color: '#444',
+    lineHeight: 20,
+  },
+  modalActionButton: {
+    marginTop: 12,
+    backgroundColor: '#6A1B9A',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  modalActionText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

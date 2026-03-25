@@ -58,6 +58,7 @@ export type RecommendationGoal = 'deficit' | 'surplus' | 'neutral';
 export interface RecommendedRecipe {
   recipe: Recipe;
   reason: string;
+  why_this_recipe?: string;
   tags: string[];
   availability: {
     total: number;
