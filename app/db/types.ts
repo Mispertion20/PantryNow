@@ -73,6 +73,21 @@ export interface AIRecommendations {
   reasoning: string;
 }
 
+export interface ShoppingSuggestion {
+  product_name: string;
+  suggested_amount: number;
+  unit: string;
+  priority_score: number;
+  short_reason: string;
+  reason_points: string[];
+  supporting_recipe_count: number;
+}
+
+export interface AIShoppingRecommendations {
+  suggestions: ShoppingSuggestion[];
+  reasoning: string;
+}
+
 export interface Database {
   initDB(): Promise<void>;
   getProducts(): Promise<Product[]>;

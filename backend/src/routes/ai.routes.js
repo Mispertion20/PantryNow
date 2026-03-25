@@ -128,6 +128,15 @@ const titleCaseMeal = (mealTime) => {
   return String(mealTime).charAt(0).toUpperCase() + String(mealTime).slice(1);
 };
 
+const normalizeIngredientName = (name) => String(name || '').trim().toLowerCase();
+
+const chooseUnitForIngredient = (ingredientName, pantryMap, fallbackUnit = 'g') => {
+  const normalized = normalizeIngredientName(ingredientName);
+  const pantry = pantryMap.get(normalized);
+  if (pantry?.unit) return pantry.unit;
+  return fallbackUnit;
+};
+
 const buildReadableRecommendationReasons = ({
   recipeTitle,
   recommendationGoal,
@@ -575,6 +584,211 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
 
     return res.status(500).json({
       message: 'Failed to generate recommendations',
+      details: error.message,
+    });
+  }
+});
+
+router.post('/shopping-recommendations', async (req, res) => {
+  try {
+    const ownerId = req.user.userId;
+
+    const [products, recipes, history, allIngredients, user] = await Promise.all([
+      Product.find({ ownerId }).sort({ id: 1 }),
+      Recipe.find({
+        $or: [{ ownerId }, { ownerId: null }, { ownerId: { $exists: false } }],
+      }).sort({ id: 1 }),
+      CookingHistory.find({ ownerId }).sort({ cooked_at: -1 }).limit(30),
+      RecipeIngredient.find({}),
+      User.findById(ownerId).select({ likedRecipeIds: 1, recommendationGoal: 1, _id: 0 }),
+    ]);
+
+    if (recipes.length === 0) {
+      return res.status(200).json({
+        data: {
+          suggestions: [],
+          reasoning: 'No recipes are available yet, so shopping suggestions are not ready yet.',
+        },
+      });
+    }
+
+    const recommendationGoal = ALLOWED_RECOMMENDATION_GOALS.has(user?.recommendationGoal)
+      ? user.recommendationGoal
+      : 'neutral';
+    const likedRecipeIds = new Set(Array.isArray(user?.likedRecipeIds) ? user.likedRecipeIds : []);
+
+    const pantryMap = new Map(
+      products.map((product) => [normalizeIngredientName(product.name), product])
+    );
+
+    const ingredientsByRecipe = new Map();
+    for (const ingredient of allIngredients) {
+      if (!ingredientsByRecipe.has(ingredient.recipe_id)) {
+        ingredientsByRecipe.set(ingredient.recipe_id, []);
+      }
+      ingredientsByRecipe.get(ingredient.recipe_id).push(ingredient);
+    }
+
+    const hour = new Date().getHours();
+    const mealTime = hour < 12 ? 'breakfast' : hour < 18 ? 'lunch' : 'dinner';
+    const preferredCategoriesByMeal = {
+      breakfast: new Set(['Breakfast']),
+      lunch: new Set(['Main Course', 'Soup', 'Salad', 'Side Dish']),
+      dinner: new Set(['Main Course', 'Soup', 'Salad', 'Side Dish']),
+    };
+    const preferredCategories = preferredCategoriesByMeal[mealTime] || new Set();
+
+    const historyByRecipeId = new Map();
+    for (const item of history) {
+      historyByRecipeId.set(item.recipe_id, (historyByRecipeId.get(item.recipe_id) || 0) + 1);
+    }
+
+    const lastMeal = history[0] || null;
+    let nextMealTarget = { target: 'balanced' };
+    if (lastMeal) {
+      const recipeIngredients = ingredientsByRecipe.get(lastMeal.recipe_id) || [];
+      const mealIngredients = Array.isArray(lastMeal.used_ingredients) && lastMeal.used_ingredients.length > 0
+        ? lastMeal.used_ingredients.map((ingredient) => ({
+            name: ingredient.product_name,
+            amount: ingredient.amount_used,
+          }))
+        : recipeIngredients.map((ingredient) => ({
+            name: ingredient.product_name,
+            amount: ingredient.amount_required,
+          }));
+      const totals = estimateTotalsFromIngredients(mealIngredients);
+      nextMealTarget = getNextMealTarget(getFillingScore(totals));
+    }
+
+    const candidateMap = new Map();
+
+    for (const recipe of recipes) {
+      const recipeIngredients = ingredientsByRecipe.get(recipe.id) || [];
+      if (recipeIngredients.length === 0) continue;
+
+      const isLiked = likedRecipeIds.has(recipe.id);
+      const cookedCount = recipe.times_cooked || historyByRecipeId.get(recipe.id) || 0;
+      const mealFit = preferredCategories.has(recipe.category);
+
+      const nutrition = estimateTotalsFromIngredients(
+        recipeIngredients.map((ingredient) => ({
+          name: ingredient.product_name,
+          amount: ingredient.amount_required,
+        }))
+      );
+      const fillingScore = getFillingScore(nutrition);
+
+      let recipePriority = 35;
+      recipePriority += Math.min(30, cookedCount * 4);
+      if (isLiked) recipePriority += 22;
+      if (mealFit) recipePriority += 12;
+
+      if (nextMealTarget.target === 'lighter' && fillingScore <= 45) recipePriority += 10;
+      if (nextMealTarget.target === 'filling' && fillingScore >= 60) recipePriority += 10;
+
+      if (recommendationGoal === 'deficit') {
+        if (fillingScore <= 45) recipePriority += 12;
+        if (fillingScore >= 65) recipePriority -= 8;
+      } else if (recommendationGoal === 'surplus') {
+        if (fillingScore >= 60) recipePriority += 12;
+        if (fillingScore <= 35) recipePriority -= 6;
+      }
+
+      for (const ingredient of recipeIngredients) {
+        const ingredientName = normalizeIngredientName(ingredient.product_name);
+        if (!ingredientName) continue;
+
+        const requiredAmount = Number(ingredient.amount_required || 0);
+        if (!Number.isFinite(requiredAmount) || requiredAmount <= 0) continue;
+
+        const pantryProduct = pantryMap.get(ingredientName);
+        const inPantryAmount = pantryProduct ? Number(pantryProduct.quantity || 0) : 0;
+        const shortage = Math.max(0, requiredAmount - inPantryAmount);
+        if (shortage <= 0) continue;
+
+        const gapRatio = Math.min(1.5, shortage / requiredAmount);
+        const contribution = Math.max(1, recipePriority * gapRatio);
+
+        if (!candidateMap.has(ingredientName)) {
+          candidateMap.set(ingredientName, {
+            product_name: ingredient.product_name,
+            unit: chooseUnitForIngredient(ingredient.product_name, pantryMap, 'g'),
+            suggested_amount: 0,
+            score: 0,
+            recipe_ids: new Set(),
+            recipe_titles: new Set(),
+            liked_hits: 0,
+            cooked_hits: 0,
+            meal_fit_hits: 0,
+          });
+        }
+
+        const candidate = candidateMap.get(ingredientName);
+        candidate.suggested_amount += shortage;
+        candidate.score += contribution;
+        candidate.recipe_ids.add(recipe.id);
+        candidate.recipe_titles.add(recipe.title);
+        if (isLiked) candidate.liked_hits += 1;
+        if (cookedCount > 0) candidate.cooked_hits += 1;
+        if (mealFit) candidate.meal_fit_hits += 1;
+      }
+    }
+
+    const suggestions = [...candidateMap.values()]
+      .map((candidate, index) => {
+        const amount = Math.max(1, Math.round(candidate.suggested_amount));
+        const recipeTitles = [...candidate.recipe_titles].slice(0, 3);
+
+        const reasonPoints = [];
+        reasonPoints.push(`Needed by ${candidate.recipe_ids.size} recipe${candidate.recipe_ids.size > 1 ? 's' : ''}${recipeTitles.length > 0 ? `: ${recipeTitles.join(', ')}` : ''}.`);
+        if (candidate.liked_hits > 0) {
+          reasonPoints.push(`Strong preference signal: appears in ${candidate.liked_hits} liked recipe${candidate.liked_hits > 1 ? 's' : ''}.`);
+        } else if (candidate.cooked_hits > 0) {
+          reasonPoints.push(`Personal habit signal: appears in ${candidate.cooked_hits} frequently cooked recipe${candidate.cooked_hits > 1 ? 's' : ''}.`);
+        } else {
+          reasonPoints.push('Variety signal: helps unlock additional recipes you have not cooked often yet.');
+        }
+        if (candidate.meal_fit_hits > 0) {
+          reasonPoints.push(`Meal-time signal: useful for your current ${mealTime} recommendations.`);
+        }
+        reasonPoints.push(`Goal signal: aligned with your ${recommendationGoal} mode and ${nextMealTarget.target} next-meal direction.`);
+
+        const shortReason = pickVariant(
+          amount + index + candidate.recipe_ids.size,
+          [
+            `${candidate.product_name} is missing for high-priority recipes in your current plan.`,
+            `${candidate.product_name} helps you cook more of your preferred recipes this week.`,
+            `${candidate.product_name} is one of the biggest pantry gaps based on your personalized ranking logic.`,
+          ]
+        );
+
+        return {
+          product_name: candidate.product_name,
+          suggested_amount: amount,
+          unit: candidate.unit,
+          priority_score: Math.round(candidate.score),
+          short_reason: shortReason,
+          reason_points: reasonPoints,
+          supporting_recipe_count: candidate.recipe_ids.size,
+        };
+      })
+      .sort((a, b) => b.priority_score - a.priority_score)
+      .slice(0, 8);
+
+    const reasoning = suggestions.length > 0
+      ? `These buy suggestions are ranked from your pantry gaps, favorite and frequent recipes, meal-time context (${mealTime}), and your ${recommendationGoal} goal.`
+      : 'Your pantry already covers most high-priority ingredients. No urgent purchases are needed right now.';
+
+    return res.status(200).json({
+      data: {
+        suggestions,
+        reasoning,
+      },
+    });
+  } catch (error) {
+    console.error('AI shopping recommendations error:', error);
+    return res.status(500).json({
+      message: 'Failed to generate shopping recommendations',
       details: error.message,
     });
   }
