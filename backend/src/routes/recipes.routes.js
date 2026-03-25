@@ -4,6 +4,7 @@ import { CookingHistory } from '../models/CookingHistory.js';
 import { Product } from '../models/Product.js';
 import { Recipe } from '../models/Recipe.js';
 import { RecipeIngredient } from '../models/RecipeIngredient.js';
+import { User } from '../models/User.js';
 import { getNextId } from '../utils/counter.js';
 import { toRecipeDto, toRecipeIngredientDto } from '../utils/mappers.js';
 
@@ -29,12 +30,109 @@ const findOwnerRecipe = async (ownerId, recipeId, session = null) => {
 router.get('/', async (req, res) => {
   try {
     const ownerId = req.user.userId;
+    const user = await User.findById(ownerId).select({ likedRecipeIds: 1, _id: 0 });
+    const likedSet = new Set(user?.likedRecipeIds || []);
+
     const recipes = await Recipe.find({
       $or: [{ ownerId }, { ownerId: null }, { ownerId: { $exists: false } }],
     }).sort({ id: 1 });
-    return res.status(200).json({ data: recipes.map(toRecipeDto) });
+    return res.status(200).json({
+      data: recipes.map((recipe) => ({
+        ...toRecipeDto(recipe),
+        is_liked: likedSet.has(recipe.id),
+      })),
+    });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to fetch recipes', details: error.message });
+  }
+});
+
+router.get('/liked', async (req, res) => {
+  try {
+    const ownerId = req.user.userId;
+    const user = await User.findById(ownerId).select({ likedRecipeIds: 1, _id: 0 });
+    const likedRecipeIds = user?.likedRecipeIds || [];
+
+    if (likedRecipeIds.length === 0) {
+      return res.status(200).json({ data: [] });
+    }
+
+    const recipes = await Recipe.find({
+      id: { $in: likedRecipeIds },
+      $or: [{ ownerId }, { ownerId: null }, { ownerId: { $exists: false } }],
+    }).sort({ id: 1 });
+
+    const recipeById = new Map(recipes.map((recipe) => [recipe.id, recipe]));
+    const ordered = likedRecipeIds
+      .map((id) => recipeById.get(id))
+      .filter(Boolean)
+      .map((recipe) => ({
+        ...toRecipeDto(recipe),
+        is_liked: true,
+      }));
+
+    return res.status(200).json({ data: ordered });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to fetch liked recipes', details: error.message });
+  }
+});
+
+router.post('/:id/like', async (req, res) => {
+  try {
+    const ownerId = req.user.userId;
+    const id = Number(req.params.id);
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ message: 'Invalid recipe id' });
+    }
+
+    const recipe = await findAccessibleRecipe(ownerId, id);
+    if (!recipe) {
+      return res.status(404).json({ message: 'Recipe not found' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      ownerId,
+      { $addToSet: { likedRecipeIds: id } },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      data: {
+        recipe_id: id,
+        is_liked: true,
+        liked_recipe_ids: user?.likedRecipeIds || [],
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to like recipe', details: error.message });
+  }
+});
+
+router.delete('/:id/like', async (req, res) => {
+  try {
+    const ownerId = req.user.userId;
+    const id = Number(req.params.id);
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ message: 'Invalid recipe id' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      ownerId,
+      { $pull: { likedRecipeIds: id } },
+      { new: true }
+    );
+
+    return res.status(200).json({
+      data: {
+        recipe_id: id,
+        is_liked: false,
+        liked_recipe_ids: user?.likedRecipeIds || [],
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to unlike recipe', details: error.message });
   }
 });
 

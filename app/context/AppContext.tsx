@@ -6,6 +6,8 @@ import { useAuthContext } from './AuthContext';
 interface AppContextType {
   products: Product[];
   recipes: Recipe[];
+  likedRecipeIds: Set<number>;
+  likedRecipes: Recipe[];
   recipeIngredients: Map<number, RecipeIngredient[]>;
   loading: boolean;
   categories: string[];
@@ -19,6 +21,9 @@ interface AppContextType {
   addRecipe: (recipe: RecipeInput) => Promise<number>;
   updateRecipe: (recipe: Recipe) => Promise<void>;
   deleteRecipe: (id: number) => Promise<void>;
+  refreshLikedRecipes: () => Promise<void>;
+  isRecipeLiked: (recipeId: number) => boolean;
+  toggleRecipeLike: (recipeId: number) => Promise<void>;
   cookRecipe: (recipeId: number) => Promise<void>;
   cookRecipeWithIngredients: (recipeId: number, usedIngredients: { productName: string; amountUsed: number }[]) => Promise<void>;
   addRecipeIngredient: (recipeId: number, productName: string, amountRequired: number) => Promise<void>;
@@ -33,6 +38,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [products, setProducts] = useState<Product[]>([]);
   const [recipeIngredients, setRecipeIngredients] = useState<Map<number, RecipeIngredient[]>>(new Map());
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [likedRecipeIds, setLikedRecipeIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
 
   const categories = [
@@ -61,8 +67,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const data = await db.getRecipes();
       setRecipes(data);
+      const likedIds = data.filter((recipe) => !!recipe.is_liked).map((recipe) => recipe.id);
+      setLikedRecipeIds(new Set(likedIds));
     } catch (error) {
       console.error('Failed to refresh recipes:', error);
+    }
+  }, []);
+
+  const refreshLikedRecipes = useCallback(async () => {
+    try {
+      const liked = await db.getLikedRecipes();
+      setLikedRecipeIds(new Set(liked.map((recipe) => recipe.id)));
+    } catch (error) {
+      console.error('Failed to refresh liked recipes:', error);
     }
   }, []);
 
@@ -86,6 +103,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!token) {
       setProducts([]);
       setRecipes([]);
+      setLikedRecipeIds(new Set());
       setRecipeIngredients(new Map());
       setLoading(false);
       return;
@@ -96,13 +114,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         await refreshProducts();
         await refreshRecipes();
+        await refreshLikedRecipes();
         await refreshRecipeIngredients();
       } finally {
         setLoading(false);
       }
     };
     init();
-  }, [token, refreshProducts, refreshRecipeIngredients, refreshRecipes]);
+  }, [token, refreshProducts, refreshRecipeIngredients, refreshRecipes, refreshLikedRecipes]);
 
   const addProduct = useCallback(async (name: string, quantity: number, unit: string) => {
     await db.addProduct(name, quantity, unit);
@@ -133,8 +152,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteRecipe = useCallback(async (id: number) => {
     await db.deleteRecipe(id);
     await refreshRecipes();
+    await refreshLikedRecipes();
     await refreshRecipeIngredients();
-  }, [refreshRecipeIngredients, refreshRecipes]);
+  }, [refreshLikedRecipes, refreshRecipeIngredients, refreshRecipes]);
+
+  const isRecipeLiked = useCallback((recipeId: number): boolean => {
+    return likedRecipeIds.has(recipeId);
+  }, [likedRecipeIds]);
+
+  const toggleRecipeLike = useCallback(async (recipeId: number) => {
+    const currentlyLiked = likedRecipeIds.has(recipeId);
+
+    if (currentlyLiked) {
+      await db.unlikeRecipe(recipeId);
+      setLikedRecipeIds((prev) => {
+        const next = new Set(prev);
+        next.delete(recipeId);
+        return next;
+      });
+      return;
+    }
+
+    await db.likeRecipe(recipeId);
+    setLikedRecipeIds((prev) => new Set(prev).add(recipeId));
+  }, [likedRecipeIds]);
+
+  const likedRecipes = recipes.filter((recipe) => likedRecipeIds.has(recipe.id));
 
   const cookRecipe = useCallback(async (recipeId: number) => {
     await db.cookRecipe(recipeId);
@@ -206,6 +249,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const value: AppContextType = {
     products,
     recipes,
+    likedRecipeIds,
+    likedRecipes,
     recipeIngredients,
     loading,
     categories,
@@ -219,6 +264,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addRecipe,
     updateRecipe,
     deleteRecipe,
+    refreshLikedRecipes,
+    isRecipeLiked,
+    toggleRecipeLike,
     cookRecipe,
     cookRecipeWithIngredients,
     addRecipeIngredient,

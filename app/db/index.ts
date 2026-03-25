@@ -64,6 +64,20 @@ const db: Database = {
 			method: 'DELETE',
 		});
 	},
+	getLikedRecipes: async (): Promise<Recipe[]> => {
+		const response = await apiRequest<ApiCollection<Recipe>>('/recipes/liked');
+		return response.data;
+	},
+	likeRecipe: async (recipeId: number): Promise<void> => {
+		await apiRequest(`/recipes/${recipeId}/like`, {
+			method: 'POST',
+		});
+	},
+	unlikeRecipe: async (recipeId: number): Promise<void> => {
+		await apiRequest(`/recipes/${recipeId}/like`, {
+			method: 'DELETE',
+		});
+	},
 	cookRecipe: async (
 		recipeId: number,
 		usedIngredients?: { productName: string; amountUsed: number }[]
@@ -117,6 +131,9 @@ export const getRecipes = db.getRecipes;
 export const addRecipe = db.addRecipe;
 export const updateRecipe = db.updateRecipe;
 export const deleteRecipe = db.deleteRecipe;
+export const getLikedRecipes = db.getLikedRecipes;
+export const likeRecipe = db.likeRecipe;
+export const unlikeRecipe = db.unlikeRecipe;
 export const cookRecipe = db.cookRecipe;
 export const getCookingHistory = db.getCookingHistory;
 export const getRecipeIngredients = db.getRecipeIngredients;

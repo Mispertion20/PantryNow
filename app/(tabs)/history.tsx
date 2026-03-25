@@ -4,6 +4,7 @@ import {
     ScrollView,
     StyleSheet,
     Text,
+    TouchableOpacity,
     View
 } from 'react-native';
 import { useAppContext } from '../context/AppContext';
@@ -22,7 +23,7 @@ type HistoryDetail = HistoryItem & {
 };
 
 export default function StatsScreen() {
-  const { recipes, products } = useAppContext();
+  const { recipes, products, likedRecipes, toggleRecipeLike } = useAppContext();
 
   const stats = useMemo(() => {
     const totalRecipesCooked = recipes.reduce((sum, r) => sum + r.times_cooked, 0);
@@ -160,6 +161,35 @@ export default function StatsScreen() {
                 <View style={styles.listCount}>
                   <Text style={styles.listCountText}>{recipe.times_cooked}</Text>
                 </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Liked Recipes */}
+      {likedRecipes.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Liked Recipes</Text>
+          <View style={styles.list}>
+            {likedRecipes.map((recipe) => (
+              <View key={recipe.id} style={styles.listItem}>
+                <View style={styles.historyContent}>
+                  <Text style={styles.listTitle} numberOfLines={1}>
+                    {recipe.title}
+                  </Text>
+                  <Text style={styles.listSubtitle}>
+                    {recipe.category} • {recipe.cooking_time} min • Cooked {recipe.times_cooked}x
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.unlikeButton}
+                  onPress={() => {
+                    void toggleRecipeLike(recipe.id);
+                  }}
+                >
+                  <Ionicons name="heart" size={18} color="#E91E63" />
+                </TouchableOpacity>
               </View>
             ))}
           </View>
@@ -360,6 +390,14 @@ const styles = StyleSheet.create({
   usedProductLine: {
     fontSize: 12,
     color: '#666',
+  },
+  unlikeButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF1F6',
   },
   alertList: {
     backgroundColor: '#fff',

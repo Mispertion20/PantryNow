@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    likedRecipeIds: {
+      type: [Number],
+      default: [],
+    },
   },
   {
     timestamps: true,

@@ -9,7 +9,14 @@ import { useAppContext } from '../context/AppContext';
 export default function RecipeDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const { recipes, products, getRecipeIngredients, cookRecipeWithIngredients } = useAppContext();
+  const {
+    recipes,
+    products,
+    getRecipeIngredients,
+    cookRecipeWithIngredients,
+    isRecipeLiked,
+    toggleRecipeLike,
+  } = useAppContext();
   const [cookModalVisible, setCookModalVisible] = useState(false);
 
   const recipe = useMemo(() => {
@@ -31,6 +38,7 @@ export default function RecipeDetailScreen() {
   }, [recipeIngredients, products]);
 
   const canCook = missingIngredients.length === 0;
+  const liked = recipe ? isRecipeLiked(recipe.id) : false;
 
   if (!recipe) {
     return (
@@ -64,7 +72,15 @@ export default function RecipeDetailScreen() {
           <Ionicons name="chevron-back" size={28} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Recipe Details</Text>
-        <View style={styles.headerPlaceholder} />
+        <TouchableOpacity
+          style={styles.likeButton}
+          onPress={() => {
+            if (!recipe) return;
+            void toggleRecipeLike(recipe.id);
+          }}
+        >
+          <Ionicons name={liked ? 'heart' : 'heart-outline'} size={22} color={liked ? '#E91E63' : '#555'} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -273,6 +289,14 @@ const styles = StyleSheet.create({
   },
   headerPlaceholder: {
     width: 36,
+  },
+  likeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF5F8',
   },
   scrollView: {
     flex: 1,

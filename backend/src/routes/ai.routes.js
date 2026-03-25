@@ -3,10 +3,98 @@ import { CookingHistory } from '../models/CookingHistory.js';
 import { Product } from '../models/Product.js';
 import { Recipe } from '../models/Recipe.js';
 import { RecipeIngredient } from '../models/RecipeIngredient.js';
+import { User } from '../models/User.js';
 import { chatCompletion, parseJsonResponse } from '../services/openai.js';
 import { toRecipeDto } from '../utils/mappers.js';
 
 const router = express.Router();
+
+const ALLOWED_TAGS = [
+  'favourite',
+  'pantry-ready',
+  'quick-meal',
+  'meal-time-fit',
+  'similar-taste',
+  'new-discovery',
+];
+
+const NUTRITION_KEYWORDS = [
+  { keys: ['egg'], caloriesPer100g: 155, proteinPer100g: 13, fatsPer100g: 11, carbsPer100g: 1.1 },
+  { keys: ['chicken', 'turkey'], caloriesPer100g: 165, proteinPer100g: 31, fatsPer100g: 3.6, carbsPer100g: 0 },
+  { keys: ['beef'], caloriesPer100g: 250, proteinPer100g: 26, fatsPer100g: 15, carbsPer100g: 0 },
+  { keys: ['salmon', 'fish'], caloriesPer100g: 208, proteinPer100g: 20, fatsPer100g: 13, carbsPer100g: 0 },
+  { keys: ['cheese', 'parmesan', 'feta', 'cheddar'], caloriesPer100g: 402, proteinPer100g: 25, fatsPer100g: 33, carbsPer100g: 1.3 },
+  { keys: ['rice', 'pasta', 'spaghetti', 'noodle', 'bread', 'flour', 'granola'], caloriesPer100g: 360, proteinPer100g: 10, fatsPer100g: 1.5, carbsPer100g: 76 },
+  { keys: ['potato'], caloriesPer100g: 77, proteinPer100g: 2, fatsPer100g: 0.1, carbsPer100g: 17 },
+  { keys: ['milk', 'yogurt', 'cream'], caloriesPer100g: 60, proteinPer100g: 3.5, fatsPer100g: 3.2, carbsPer100g: 4.8 },
+  { keys: ['butter', 'oil', 'mayo', 'mayonnaise'], caloriesPer100g: 717, proteinPer100g: 0, fatsPer100g: 81, carbsPer100g: 0 },
+  { keys: ['lentil', 'bean', 'peas'], caloriesPer100g: 116, proteinPer100g: 9, fatsPer100g: 0.4, carbsPer100g: 20 },
+  { keys: ['banana', 'fruit', 'tomato', 'cucumber', 'lettuce', 'onion', 'carrot', 'zucchini'], caloriesPer100g: 45, proteinPer100g: 1.2, fatsPer100g: 0.3, carbsPer100g: 10 },
+  { keys: ['sugar', 'honey'], caloriesPer100g: 387, proteinPer100g: 0, fatsPer100g: 0, carbsPer100g: 100 },
+];
+
+const DEFAULT_NUTRITION = {
+  caloriesPer100g: 120,
+  proteinPer100g: 4,
+  fatsPer100g: 3,
+  carbsPer100g: 18,
+};
+
+const resolveNutritionProfile = (ingredientName) => {
+  const name = String(ingredientName || '').toLowerCase();
+  return (
+    NUTRITION_KEYWORDS.find((profile) => profile.keys.some((key) => name.includes(key))) ||
+    DEFAULT_NUTRITION
+  );
+};
+
+const estimateTotalsFromIngredients = (ingredients) => {
+  return ingredients.reduce(
+    (acc, ingredient) => {
+      const amount = Number(ingredient.amount ?? ingredient.amount_required ?? ingredient.amount_used ?? 0);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return acc;
+      }
+
+      const grams = amount <= 20 ? amount * 30 : amount;
+      const ratio = grams / 100;
+      const profile = resolveNutritionProfile(ingredient.name || ingredient.product_name);
+
+      acc.calories += ratio * profile.caloriesPer100g;
+      acc.protein += ratio * profile.proteinPer100g;
+      acc.fats += ratio * profile.fatsPer100g;
+      acc.carbs += ratio * profile.carbsPer100g;
+      return acc;
+    },
+    { calories: 0, protein: 0, fats: 0, carbs: 0 }
+  );
+};
+
+const getFillingScore = ({ calories, protein, fats, carbs }) => {
+  const raw = calories * 0.12 + protein * 2.4 + fats * 1.5 + carbs * 0.7;
+  return Math.max(0, Math.min(100, Math.round(raw / 10)));
+};
+
+const getNextMealTarget = (fillingScore) => {
+  if (fillingScore >= 70) {
+    return {
+      target: 'lighter',
+      guidance: 'Previous meal was heavy, so the next recommendation should be lighter and easier to digest.',
+    };
+  }
+
+  if (fillingScore <= 35) {
+    return {
+      target: 'filling',
+      guidance: 'Previous meal was light, so the next recommendation should be more filling and nutrient-dense.',
+    };
+  }
+
+  return {
+    target: 'balanced',
+    guidance: 'Previous meal was balanced, so keep the next recommendation moderate and well-rounded.',
+  };
+};
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -34,13 +122,14 @@ router.post('/recommendations', async (req, res) => {
     const ownerId = req.user.userId;
 
     // 1) Gather all user data in parallel
-    const [products, recipes, history, allIngredients] = await Promise.all([
+    const [products, recipes, history, allIngredients, user] = await Promise.all([
       Product.find({ ownerId }).sort({ id: 1 }),
       Recipe.find({
         $or: [{ ownerId }, { ownerId: null }, { ownerId: { $exists: false } }],
       }).sort({ id: 1 }),
       CookingHistory.find({ ownerId }).sort({ cooked_at: -1 }).limit(30),
       RecipeIngredient.find({}),
+      User.findById(ownerId).select({ likedRecipeIds: 1, _id: 0 }),
     ]);
 
     if (recipes.length === 0) {
@@ -84,6 +173,46 @@ router.post('/recommendations', async (req, res) => {
       if (r.times_cooked > 0) frequencyMap[r.id] = r.times_cooked;
     }
 
+    const likedRecipeIds = Array.isArray(user?.likedRecipeIds) ? user.likedRecipeIds : [];
+
+    const recipeIngredientsById = new Map();
+    for (const recipe of recipeCatalogue) {
+      recipeIngredientsById.set(recipe.id, recipe.ingredients || []);
+    }
+
+    const lastMeal = history[0] || null;
+    let previousMealNutrition = {
+      recipe_id: null,
+      recipe_title: '',
+      calories: 0,
+      protein: 0,
+      fats: 0,
+      carbs: 0,
+      filling_score: 50,
+    };
+
+    if (lastMeal) {
+      const mealIngredients = Array.isArray(lastMeal.used_ingredients) && lastMeal.used_ingredients.length > 0
+        ? lastMeal.used_ingredients.map((ingredient) => ({
+            name: ingredient.product_name,
+            amount: ingredient.amount_used,
+          }))
+        : recipeIngredientsById.get(lastMeal.recipe_id) || [];
+
+      const totals = estimateTotalsFromIngredients(mealIngredients);
+      previousMealNutrition = {
+        recipe_id: lastMeal.recipe_id,
+        recipe_title: lastMeal.recipe_title || '',
+        calories: Math.round(totals.calories),
+        protein: Math.round(totals.protein),
+        fats: Math.round(totals.fats),
+        carbs: Math.round(totals.carbs),
+        filling_score: getFillingScore(totals),
+      };
+    }
+
+    const nextMealTarget = getNextMealTarget(previousMealNutrition.filling_score);
+
     // 7) Current time-of-day context
     const hour = new Date().getHours();
     const mealTime = hour < 12 ? 'breakfast' : hour < 18 ? 'lunch' : 'dinner';
@@ -100,10 +229,30 @@ Recommendation priorities (in order):
 4. **Taste similarity** — if the user frequently cooks certain ingredient combinations (e.g. eggs + cheese), recommend other recipes that share similar ingredients or flavour profile.
 5. **Time-of-day** — it is currently ${mealTime} time, so prefer matching categories.
 6. **Discovery** — include at least one recipe the user has never cooked, if available.
+7. **Meal context & nutrition awareness** — adjust suggestions using previous meal nutrition context:
+  - if previous meal was heavy -> recommend lighter meals
+  - if previous meal was light -> recommend more filling meals
+  - if previous meal was balanced -> keep recommendations balanced
 
 Important meal-time rule:
 - If current_meal_time is lunch or dinner, avoid breakfast-heavy recipes unless there are very few suitable alternatives.
 - If current_meal_time is breakfast, breakfast recipes should be prioritized.
+
+Allowed tags (use ONLY these 6 values):
+1. "favourite"      -> Recipe user cooks often / repeatedly.
+2. "pantry-ready"   -> Most or all required ingredients are available.
+3. "quick-meal"     -> Fast to prepare (short cooking time).
+4. "meal-time-fit"  -> Category matches current meal time (${mealTime}).
+5. "similar-taste"  -> Similar ingredients/flavor profile to user's frequent choices.
+6. "new-discovery"  -> User has never cooked it or cooked very rarely.
+
+Tag rules:
+- Each recommendation must include 1 to 3 tags.
+- Tags must come only from the 6 allowed values above.
+- Do not invent new tag names.
+
+Reasoning rule:
+- "reason" for each recommendation must mention meal-context logic (lighter/filling/balanced) when relevant.
 
 Return ONLY a JSON object (no markdown) with this exact shape:
 {
@@ -112,7 +261,7 @@ Return ONLY a JSON object (no markdown) with this exact shape:
       "recipe_id": <number>,
       "score": <number 0-100>,
       "reason": "<short explanation why this is recommended>",
-      "tags": ["<tag>"]   // e.g. "favourite", "pantry-ready", "new-discovery", "similar-taste"
+      "tags": ["<tag>"]
     }
   ],
   "reasoning": "<1-2 sentence overall summary of the recommendation strategy>"
@@ -127,6 +276,9 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
       recipes: recipeCatalogue,
       cooking_history: historyList,
       frequency: frequencyMap,
+      liked_recipe_ids: likedRecipeIds,
+      previous_meal_nutrition: previousMealNutrition,
+      next_meal_target: nextMealTarget,
     });
 
     const raw = await chatCompletion(systemPrompt, userMessage, {
@@ -167,7 +319,11 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
           recipe: toRecipeDto(recipe),
           score: rec.score,
           reason: rec.reason,
-          tags: rec.tags || [],
+          tags: Array.isArray(rec.tags)
+            ? rec.tags
+                .filter((tag) => ALLOWED_TAGS.includes(String(tag)))
+                .slice(0, 3)
+            : [],
           availability: {
             total: totalIngredients,
             available: availableCount,
@@ -190,6 +346,10 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
       .map((entry) => {
         const category = entry.recipe.category;
         const matchesMealTime = preferredCategories.has(category);
+        const isLiked = likedRecipeIds.includes(entry.recipe.id);
+        const recipeIngredients = recipeIngredientsById.get(entry.recipe.id) || [];
+        const recipeNutrition = estimateTotalsFromIngredients(recipeIngredients);
+        const recipeFillingScore = getFillingScore(recipeNutrition);
 
         let adjustedScore = Number(entry.score) || 0;
 
@@ -201,13 +361,39 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
           adjustedScore -= 8;
         }
 
+        if (isLiked) {
+          adjustedScore += 18;
+        }
+
+        if (nextMealTarget.target === 'lighter') {
+          if (recipeFillingScore <= 45) adjustedScore += 14;
+          if (recipeFillingScore >= 70) adjustedScore -= 12;
+        } else if (nextMealTarget.target === 'filling') {
+          if (recipeFillingScore >= 60) adjustedScore += 14;
+          if (recipeFillingScore <= 35) adjustedScore -= 10;
+        }
+
+        const mealContextReasonPrefix = nextMealTarget.target === 'lighter'
+          ? 'Suggested as a lighter follow-up to your previous heavy meal.'
+          : nextMealTarget.target === 'filling'
+            ? 'Suggested as a more filling follow-up to your previous light meal.'
+            : 'Suggested as a balanced follow-up to your previous meal.';
+
         return {
           ...entry,
+          reason: `${mealContextReasonPrefix} ${entry.reason}`.trim(),
+          tags: Array.from(new Set([
+            ...entry.tags,
+            ...(isLiked ? ['favourite'] : []),
+            ...(matchesMealTime ? ['meal-time-fit'] : []),
+            ...(nextMealTarget.target === 'lighter' && recipeFillingScore <= 45 ? ['quick-meal'] : []),
+          ])).filter((tag) => ALLOWED_TAGS.includes(tag)).slice(0, 3),
           score: Math.max(0, Math.min(100, adjustedScore)),
         };
       })
       .sort((a, b) => b.score - a.score)
-      .slice(0, 6);
+      .slice(0, 6)
+      .map(({ score: _score, ...entryWithoutScore }) => entryWithoutScore);
 
     return res.status(200).json({
       data: {

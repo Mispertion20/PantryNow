@@ -23,6 +23,8 @@ interface AIRecommendationsProps {
 const tagConfig: Record<string, { icon: string; color: string; label: string }> = {
   favourite: { icon: 'heart', color: '#E91E63', label: 'Favourite' },
   'pantry-ready': { icon: 'checkmark-circle', color: '#4CAF50', label: 'Ready' },
+  'quick-meal': { icon: 'flash', color: '#00ACC1', label: 'Quick' },
+  'meal-time-fit': { icon: 'restaurant', color: '#3F51B5', label: 'Meal Fit' },
   'new-discovery': { icon: 'sparkles', color: '#9C27B0', label: 'New' },
   'similar-taste': { icon: 'color-palette', color: '#FF9800', label: 'Similar' },
 };
@@ -152,9 +154,6 @@ export const AIRecommendationsList: React.FC<AIRecommendationsProps> = ({
                 <Text style={styles.cardTitle} numberOfLines={1}>
                   {rec.recipe.title}
                 </Text>
-                <View style={styles.scoreCircle}>
-                  <Text style={styles.scoreText}>{rec.score}</Text>
-                </View>
               </View>
 
               <Text style={styles.cardReason} numberOfLines={2}>
@@ -336,19 +335,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333',
     marginRight: 8,
-  },
-  scoreCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3E5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scoreText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#9C27B0',
   },
   cardReason: {
     fontSize: 13,

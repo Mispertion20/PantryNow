@@ -20,6 +20,7 @@ export interface Recipe {
   image_url?: string;
   image_data?: string;
   is_global?: boolean;
+  is_liked?: boolean;
   category: string;
   cooking_time: number;
   times_cooked: number;
@@ -54,7 +55,6 @@ export interface ProductUpdateInput {
 
 export interface RecommendedRecipe {
   recipe: Recipe;
-  score: number;
   reason: string;
   tags: string[];
   availability: {
@@ -79,6 +79,9 @@ export interface Database {
   addRecipe(recipe: RecipeInput): Promise<number>;
   updateRecipe(recipe: Recipe): Promise<void>;
   deleteRecipe(id: number): Promise<void>;
+  getLikedRecipes(): Promise<Recipe[]>;
+  likeRecipe(recipeId: number): Promise<void>;
+  unlikeRecipe(recipeId: number): Promise<void>;
   cookRecipe(
     recipeId: number,
     usedIngredients?: { productName: string; amountUsed: number }[]
