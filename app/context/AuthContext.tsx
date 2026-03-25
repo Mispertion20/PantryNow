@@ -36,8 +36,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const [storedToken, storedUser] = await Promise.all([getAuthToken(), getAuthUser()]);
 
         if (storedToken && storedUser) {
-          setToken(storedToken);
-          setUser(storedUser);
+          try {
+            const profile = await apiRequest<{ data: AuthUser }>('/auth/me', {
+              method: 'GET',
+              requiresAuth: true,
+            });
+
+            setToken(storedToken);
+            setUser(profile.data ?? storedUser);
+          } catch {
+            await clearAuthSession();
+            setToken(null);
+            setUser(null);
+          }
         }
       } finally {
         setLoading(false);

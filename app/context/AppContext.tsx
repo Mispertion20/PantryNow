@@ -67,15 +67,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const refreshRecipeIngredients = useCallback(async () => {
-    const allRecipes = await db.getRecipes();
-    const entries = await Promise.all(
-      allRecipes.map(async (recipe) => {
-        const ingredients = await db.getRecipeIngredients(recipe.id);
-        return [recipe.id, ingredients] as const;
-      })
-    );
+    try {
+      const allRecipes = await db.getRecipes();
+      const entries = await Promise.all(
+        allRecipes.map(async (recipe) => {
+          const ingredients = await db.getRecipeIngredients(recipe.id);
+          return [recipe.id, ingredients] as const;
+        })
+      );
 
-    setRecipeIngredients(new Map(entries));
+      setRecipeIngredients(new Map(entries));
+    } catch (error) {
+      console.error('Failed to refresh recipe ingredients:', error);
+    }
   }, []);
 
   useEffect(() => {
@@ -89,10 +93,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const init = async () => {
       setLoading(true);
-      await refreshProducts();
-      await refreshRecipes();
-      await refreshRecipeIngredients();
-      setLoading(false);
+      try {
+        await refreshProducts();
+        await refreshRecipes();
+        await refreshRecipeIngredients();
+      } finally {
+        setLoading(false);
+      }
     };
     init();
   }, [token, refreshProducts, refreshRecipeIngredients, refreshRecipes]);

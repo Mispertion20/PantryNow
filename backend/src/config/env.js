@@ -7,6 +7,7 @@ export const env = {
   mongodbUri: process.env.MONGODB_URI || '',
   jwtSecret: process.env.JWT_SECRET || '',
   clientOrigin: process.env.CLIENT_ORIGIN || '*',
+  openaiApiKey: process.env.OPENAI_API_KEY || '',
 };
 
 if (!env.mongodbUri) {
@@ -15,4 +16,8 @@ if (!env.mongodbUri) {
 
 if (!env.jwtSecret) {
   throw new Error('Missing JWT_SECRET in backend/.env');
+}
+
+if (!env.openaiApiKey) {
+  console.warn('WARNING: Missing OPENAI_API_KEY in backend/.env — AI features will be unavailable');
 }
