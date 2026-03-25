@@ -101,6 +101,10 @@ Recommendation priorities (in order):
 5. **Time-of-day** — it is currently ${mealTime} time, so prefer matching categories.
 6. **Discovery** — include at least one recipe the user has never cooked, if available.
 
+Important meal-time rule:
+- If current_meal_time is lunch or dinner, avoid breakfast-heavy recipes unless there are very few suitable alternatives.
+- If current_meal_time is breakfast, breakfast recipes should be prioritized.
+
 Return ONLY a JSON object (no markdown) with this exact shape:
 {
   "recommendations": [
@@ -174,9 +178,40 @@ Only recommend recipes that exist in the catalogue. Use their exact recipe_id va
         };
       });
 
+    const preferredCategoriesByMeal = {
+      breakfast: new Set(['Breakfast']),
+      lunch: new Set(['Main Course', 'Soup', 'Salad', 'Side Dish']),
+      dinner: new Set(['Main Course', 'Soup', 'Salad', 'Side Dish']),
+    };
+
+    const preferredCategories = preferredCategoriesByMeal[mealTime] || new Set();
+
+    const reranked = enriched
+      .map((entry) => {
+        const category = entry.recipe.category;
+        const matchesMealTime = preferredCategories.has(category);
+
+        let adjustedScore = Number(entry.score) || 0;
+
+        if (matchesMealTime) {
+          adjustedScore += 15;
+        } else if (mealTime !== 'breakfast' && category === 'Breakfast') {
+          adjustedScore -= 25;
+        } else {
+          adjustedScore -= 8;
+        }
+
+        return {
+          ...entry,
+          score: Math.max(0, Math.min(100, adjustedScore)),
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+
     return res.status(200).json({
       data: {
-        recommendations: enriched,
+        recommendations: reranked,
         reasoning: parsed.reasoning || '',
       },
     });

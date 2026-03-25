@@ -136,18 +136,18 @@ export const AIRecommendationsList: React.FC<AIRecommendationsProps> = ({
             activeOpacity={0.7}
             onPress={() => onViewRecipe(rec.recipe.id)}
           >
-            {index === 0 && (
-              <View style={styles.topPickBadge}>
-                <Ionicons name="trophy" size={12} color="#fff" />
-                <Text style={styles.topPickText}>Top Pick</Text>
-              </View>
-            )}
-
             {imageUri ? (
               <Image source={{ uri: imageUri }} style={styles.cardImage} resizeMode="cover" />
             ) : null}
 
             <View style={styles.cardBody}>
+              {index === 0 && (
+                <View style={styles.topPickBadge}>
+                  <Ionicons name="trophy" size={12} color="#fff" />
+                  <Text style={styles.topPickText}>Top Pick</Text>
+                </View>
+              )}
+
               <View style={styles.cardTopRow}>
                 <Text style={styles.cardTitle} numberOfLines={1}>
                   {rec.recipe.title}
@@ -302,10 +302,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   topPickBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    zIndex: 10,
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -313,6 +310,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+    marginBottom: 10,
   },
   topPickText: {
     fontSize: 11,
