@@ -156,9 +156,7 @@ export default function AllergySettingsScreen() {
       <View style={styles.footer}>
         <Button
           title={saving ? 'Saving...' : 'Save allergies'}
-          onPress={() => {
-            void handleSave();
-          }}
+          onPress={handleSave}
           disabled={saving}
         />
       </View>

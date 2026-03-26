@@ -1,11 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     ScrollView,
     StyleSheet,
     Text,
-    TouchableOpacity,
     View
 } from 'react-native';
 import { AIRecommendationsList } from '../components/AIRecommendations';
@@ -59,13 +58,6 @@ export default function HomeScreen() {
     if (hour < 18) return 'Lunch';
     return 'Dinner';
   };
-
-  const mostCooked = useMemo(() => {
-    return recipes
-      .filter((r) => r.times_cooked > 0)
-      .sort((a, b) => b.times_cooked - a.times_cooked)
-      .slice(0, 5);
-  }, [recipes]);
 
   const timeOfDay = getTimeOfDay();
 
@@ -146,34 +138,6 @@ export default function HomeScreen() {
         onCook={handleCookAIRec}
         onViewRecipe={handleViewRecipe}
       />
-
-      {/* Most Cooked */}
-      {mostCooked.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Favorites</Text>
-          <View style={styles.favoritesList}>
-            {mostCooked.map((recipe) => (
-              <View key={recipe.id} style={styles.favoriteItem}>
-                <View style={styles.favoriteInfo}>
-                  <Text style={styles.favoriteName} numberOfLines={1}>
-                    {recipe.title}
-                  </Text>
-                  <View style={styles.favoriteStats}>
-                    <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
-                    <Text style={styles.favoriteCount}>Cooked {recipe.times_cooked}x</Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={() => openCookModal(recipe)}
-                  style={styles.cookButton}
-                >
-                  <Ionicons name="play-circle-outline" size={24} color="#FF6347" />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        </View>
-      )}
 
       <CookIngredientsModal
         visible={cookModalVisible}
@@ -257,52 +221,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     marginTop: 4,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#333',
-  },
-  favoritesList: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    overflow: 'hidden',
-    elevation: 2,
-  },
-  favoriteItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  favoriteInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  favoriteName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
-  },
-  favoriteStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  favoriteCount: {
-    fontSize: 12,
-    color: '#999',
-  },
-  cookButton: {
-    padding: 8,
   },
 });

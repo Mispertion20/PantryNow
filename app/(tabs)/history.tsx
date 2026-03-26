@@ -53,7 +53,6 @@ export default function ProfileScreen() {
   const stats = useMemo(() => {
     const totalRecipesCooked = recipes.reduce((sum, r) => sum + r.times_cooked, 0);
     const mostCooked = [...recipes].sort((a, b) => b.times_cooked - a.times_cooked);
-    const favoriteRecipe = mostCooked[0];
     const avgCookingTime =
       recipes.length > 0
         ? Math.round(recipes.reduce((sum, r) => sum + r.cooking_time, 0) / recipes.length)
@@ -61,7 +60,6 @@ export default function ProfileScreen() {
 
     return {
       totalRecipesCooked,
-      favoriteRecipe,
       avgCookingTime,
       mostCooked: mostCooked.slice(0, 5),
     };
@@ -284,26 +282,6 @@ export default function ProfileScreen() {
           <Text style={styles.statLabel}>Total Products</Text>
         </View>
       </View>
-
-      {stats.favoriteRecipe && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Favorite</Text>
-          <View style={styles.favoriteCard}>
-            <View style={styles.favoriteIcon}>
-              <Ionicons name="heart" size={32} color="#FF6347" />
-            </View>
-            <View style={styles.favoriteContent}>
-              <Text style={styles.favoriteName} numberOfLines={1}>
-                {stats.favoriteRecipe.title}
-              </Text>
-              <Text style={styles.favoriteDetail}>Cooked {stats.favoriteRecipe.times_cooked} times</Text>
-              <Text style={styles.favoriteCategory}>
-                {stats.favoriteRecipe.category} • {stats.favoriteRecipe.cooking_time} min
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
 
       {stats.mostCooked.length > 0 && (
         <View style={styles.section}>

@@ -96,24 +96,6 @@ export default function ProductsScreen() {
     void fetchShoppingSuggestions();
   };
 
-  const handleAddSuggestionToPantry = async (suggestion: ShoppingSuggestion) => {
-    const existing = products.find(
-      (product) => product.name.trim().toLowerCase() === suggestion.product_name.trim().toLowerCase()
-    );
-
-    if (existing) {
-      await updateProduct(existing.id, {
-        quantity: existing.quantity + suggestion.suggested_amount,
-        unit: existing.unit || suggestion.unit,
-      });
-    } else {
-      await addProduct(suggestion.product_name, suggestion.suggested_amount, suggestion.unit);
-    }
-
-    setDetailsSuggestion(null);
-    void fetchShoppingSuggestions();
-  };
-
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -194,12 +176,7 @@ export default function ProductsScreen() {
                 <View style={styles.aiSuggestionsList}>
                   {shoppingSuggestions.map((suggestion, index) => (
                     <View key={`${suggestion.product_name}-${index}`} style={styles.aiSuggestionCard}>
-                      <View style={styles.aiSuggestionTopRow}>
-                        <Text style={styles.aiSuggestionTitle}>{suggestion.product_name}</Text>
-                        <View style={styles.priorityBadge}>
-                          <Text style={styles.priorityBadgeText}>Priority {Math.max(1, Math.round(suggestion.priority_score / 20))}/5</Text>
-                        </View>
-                      </View>
+                      <Text style={styles.aiSuggestionTitle}>{suggestion.product_name}</Text>
 
                       <Text style={styles.aiSuggestionAmount}>
                         Buy about {suggestion.suggested_amount} {suggestion.unit}
@@ -211,16 +188,6 @@ export default function ProductsScreen() {
                         <TouchableOpacity style={styles.whyButton} onPress={() => setDetailsSuggestion(suggestion)}>
                           <Ionicons name="help-circle-outline" size={14} color="#6A1B9A" />
                           <Text style={styles.whyButtonText}>Why this?</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.quickAddButton}
-                          onPress={() => {
-                            void handleAddSuggestionToPantry(suggestion);
-                          }}
-                        >
-                          <Ionicons name="add-circle-outline" size={14} color="#fff" />
-                          <Text style={styles.quickAddButtonText}>Add to pantry</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -293,7 +260,7 @@ export default function ProductsScreen() {
 
             <View style={styles.modalFooter}>
               <Button title="Cancel" variant="secondary" onPress={() => setModalVisible(false)} />
-              <Button title={editingProduct ? 'Update' : 'Add'} variant="primary" onPress={() => void handleSave()} />
+              <Button title={editingProduct ? 'Update' : 'Add'} variant="primary" onPress={handleSave} />
             </View>
           </View>
         </View>
@@ -320,18 +287,6 @@ export default function ProductsScreen() {
               ))}
             </ScrollView>
 
-            {detailsSuggestion ? (
-              <TouchableOpacity
-                style={styles.detailsAddButton}
-                onPress={() => {
-                  void handleAddSuggestionToPantry(detailsSuggestion);
-                }}
-              >
-                <Text style={styles.detailsAddButtonText}>
-                  Add {detailsSuggestion.suggested_amount} {detailsSuggestion.unit} to pantry
-                </Text>
-              </TouchableOpacity>
-            ) : null}
           </View>
         </View>
       </Modal>
@@ -493,17 +448,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#333',
-  },
-  priorityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    backgroundColor: '#FFF5F1',
-  },
-  priorityBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FF6347',
+    marginBottom: 4,
   },
   aiSuggestionAmount: {
     fontSize: 12,
@@ -519,7 +464,7 @@ const styles = StyleSheet.create({
   },
   aiSuggestionActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     gap: 8,
   },
@@ -536,20 +481,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#6A1B9A',
-  },
-  quickAddButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FF6347',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  quickAddButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#fff',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -685,17 +616,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#444',
     lineHeight: 20,
-  },
-  detailsAddButton: {
-    marginTop: 10,
-    backgroundColor: '#FF6347',
-    borderRadius: 8,
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  detailsAddButtonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
   },
 });

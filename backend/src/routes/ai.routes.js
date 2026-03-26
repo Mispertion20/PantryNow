@@ -437,7 +437,7 @@ router.post('/recommendations', async (req, res) => {
 
 Your task: Given the user's pantry, their full recipe catalogue (with ingredients), their cooking history and favourites, recommend the BEST recipes for them right now.
 
-Recommendation priorities (in order):
+Recommendation priorities (balance them based on current context):
 1. **Cookability** — prefer recipes whose ingredients are fully or mostly available in the pantry.
 2. **User favourites** — recipes the user has cooked most frequently should be weighted higher.
 3. **Recent history** — avoid recommending what was just cooked; suggest variety.
@@ -933,6 +933,153 @@ router.post('/shopping-recommendations', async (req, res) => {
     console.error('AI shopping recommendations error:', error);
     return res.status(500).json({
       message: 'Failed to generate shopping recommendations',
+      details: error.message,
+    });
+  }
+});
+
+router.post('/recipe-instructions', async (req, res) => {
+  try {
+    const ownerId = req.user.userId;
+    const recipeId = Number(req.body?.recipe_id);
+
+    if (Number.isNaN(recipeId)) {
+      return res.status(400).json({ message: 'Invalid recipe_id' });
+    }
+
+    const [recipe, recipeIngredients, products, user] = await Promise.all([
+      Recipe.findOne({
+        id: recipeId,
+        $or: [{ ownerId }, { ownerId: null }, { ownerId: { $exists: false } }],
+      }),
+      RecipeIngredient.find({ recipe_id: recipeId }).sort({ id: 1 }),
+      Product.find({ ownerId }).sort({ id: 1 }),
+      User.findById(ownerId).select({ personalizationSurvey: 1, customInstructions: 1, _id: 0 }),
+    ]);
+
+    if (!recipe) {
+      return res.status(404).json({ message: 'Recipe not found' });
+    }
+
+    const surveyProfile = normalizeSurveyProfile(user?.personalizationSurvey);
+    const customInstructions = String(user?.customInstructions || '').trim();
+
+    const pantryMap = new Map(
+      products.map((product) => [normalizeIngredientName(product.name), product])
+    );
+
+    const ingredients = recipeIngredients.map((ingredient) => {
+      const normalized = normalizeIngredientName(ingredient.product_name);
+      const pantry = pantryMap.get(normalized);
+      const required = Number(ingredient.amount_required || 0);
+      const available = pantry ? Number(pantry.quantity || 0) : 0;
+      const shortage = Math.max(0, required - available);
+
+      return {
+        name: ingredient.product_name,
+        amount_required: required,
+        pantry_quantity: available,
+        pantry_unit: pantry?.unit || '',
+        has_enough: shortage <= 0,
+        shortage: shortage,
+      };
+    });
+
+    const systemPrompt = `You are PantryNow's AI cooking assistant.
+
+Your task: generate clear, practical, step-by-step cooking instructions for one recipe.
+
+Personalization requirements:
+- Adapt wording and tips to user profile preferences when useful.
+- Respect restrictions and allergies strictly.
+- Consider available pantry quantities and mention practical substitutions only when needed.
+- Keep instructions beginner-friendly, concise, and actionable.
+
+Output rules:
+- Return JSON only (no markdown).
+- Keep steps specific and chronological.
+- Use 5 to 10 short steps.
+- Include a short personalized note.
+
+Return exactly this shape:
+{
+  "title": "string",
+  "intro": "string",
+  "steps": ["string"],
+  "tips": ["string"],
+  "personalization_note": "string"
+}`;
+
+    const userMessage = JSON.stringify({
+      recipe: {
+        id: recipe.id,
+        title: recipe.title,
+        description: recipe.description || '',
+        category: recipe.category,
+        cooking_time: recipe.cooking_time,
+      },
+      ingredients,
+      pantry: products.map((p) => ({
+        name: p.name,
+        quantity: p.quantity,
+        unit: p.unit,
+      })),
+      survey_profile: surveyProfile,
+      custom_instructions: customInstructions,
+    });
+
+    const raw = await chatCompletion(systemPrompt, userMessage, {
+      temperature: 0.5,
+      maxTokens: 900,
+      json: true,
+    });
+
+    const parsed = parseJsonResponse(raw);
+
+    if (!parsed || !Array.isArray(parsed.steps) || parsed.steps.length === 0) {
+      return res.status(200).json({
+        data: {
+          title: `How to cook ${recipe.title}`,
+          intro: 'Personalized AI instructions are temporarily unavailable. Here is a simple fallback guide.',
+          steps: [
+            'Prepare all ingredients and tools before you start.',
+            'Wash and cut ingredients according to the recipe needs.',
+            'Cook using medium heat and add ingredients in stages based on hardness and timing.',
+            'Taste and adjust seasoning gradually.',
+            'Serve immediately while hot for best texture and flavor.',
+          ],
+          tips: [
+            'Use available pantry items first to reduce waste.',
+            'If an ingredient is missing, use a similar option with a close flavor profile.',
+          ],
+          personalization_note: 'Fallback mode used. Refresh to try AI-generated personalized instructions again.',
+        },
+      });
+    }
+
+    return res.status(200).json({
+      data: {
+        title: String(parsed.title || `How to cook ${recipe.title}`),
+        intro: String(parsed.intro || ''),
+        steps: parsed.steps.map((step) => String(step)).filter(Boolean).slice(0, 10),
+        tips: Array.isArray(parsed.tips)
+          ? parsed.tips.map((tip) => String(tip)).filter(Boolean).slice(0, 5)
+          : [],
+        personalization_note: String(parsed.personalization_note || ''),
+      },
+    });
+  } catch (error) {
+    console.error('AI recipe instructions error:', error);
+
+    if (error?.message?.includes('API key')) {
+      return res.status(503).json({
+        message: 'AI service unavailable',
+        details: 'OpenAI API key is not configured',
+      });
+    }
+
+    return res.status(500).json({
+      message: 'Failed to generate recipe instructions',
       details: error.message,
     });
   }

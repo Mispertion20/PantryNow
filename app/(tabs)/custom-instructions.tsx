@@ -85,9 +85,7 @@ export default function CustomInstructionsScreen() {
       <View style={styles.footer}>
         <Button
           title={saving ? 'Saving...' : 'Save instructions'}
-          onPress={() => {
-            void handleSave();
-          }}
+          onPress={handleSave}
           disabled={saving}
         />
       </View>

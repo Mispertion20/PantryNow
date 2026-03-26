@@ -340,9 +340,7 @@ export const PersonalizationSurveyForm: React.FC<Props> = ({
       <View style={styles.footer}>
         <Button
           title={saving ? 'Saving survey...' : submitLabel}
-          onPress={() => {
-            void handleSubmit();
-          }}
+          onPress={handleSubmit}
           disabled={saving}
         />
       </View>

@@ -1,11 +1,11 @@
-import React from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface ConfirmDialogProps {
   visible: boolean;
   title: string;
   message: string;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   onCancel: () => void;
   confirmText?: string;
   cancelText?: string;
@@ -22,6 +22,22 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelText = 'Cancel',
   isDangerous = false,
 }) => {
+  const [confirming, setConfirming] = useState(false);
+
+  const handleConfirm = async () => {
+    if (confirming) return;
+
+    try {
+      const maybePromise = onConfirm();
+      if (maybePromise && typeof (maybePromise as Promise<void>).then === 'function') {
+        setConfirming(true);
+        await maybePromise;
+      }
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -38,15 +54,23 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={onCancel}
+              disabled={confirming}
             >
               <Text style={styles.cancelButtonText}>{cancelText}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.confirmButton, isDangerous && styles.confirmButtonDangerous]}
-              onPress={onConfirm}
+              style={[styles.confirmButton, isDangerous && styles.confirmButtonDangerous, confirming && styles.disabled]}
+              onPress={() => {
+                void handleConfirm();
+              }}
+              disabled={confirming}
             >
-              <Text style={styles.confirmButtonText}>{confirmText}</Text>
+              {confirming ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.confirmButtonText}>{confirmText}</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -112,5 +136,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  disabled: {
+    opacity: 0.75,
   },
 });

@@ -1,11 +1,12 @@
-import React from 'react';
-import { StyleSheet, Text, TextStyle, TouchableOpacity, ViewStyle } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TextStyle, TouchableOpacity, ViewStyle } from 'react-native';
 
 interface ButtonProps {
-  onPress: () => void;
+  onPress: () => void | Promise<void>;
   title: string;
   variant?: 'primary' | 'secondary' | 'danger' | 'success';
   disabled?: boolean;
+  loading?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
 }
@@ -15,16 +16,45 @@ export const Button: React.FC<ButtonProps> = ({
   title,
   variant = 'primary',
   disabled = false,
+  loading = false,
   style,
   textStyle,
 }) => {
+  const [internalLoading, setInternalLoading] = useState(false);
+
+  const isLoading = loading || internalLoading;
+
+  const handlePress = async () => {
+    if (disabled || isLoading) {
+      return;
+    }
+
+    try {
+      const maybePromise = onPress();
+      if (maybePromise && typeof (maybePromise as Promise<void>).then === 'function') {
+        setInternalLoading(true);
+        await maybePromise;
+      }
+    } finally {
+      setInternalLoading(false);
+    }
+  };
+
+  const spinnerColor = variant === 'secondary' ? '#333' : '#fff';
+
   return (
     <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled}
-      style={[styles.button, styles[variant], disabled && styles.disabled, style]}
+      onPress={() => {
+        void handlePress();
+      }}
+      disabled={disabled || isLoading}
+      style={[styles.button, styles[variant], (disabled || isLoading) && styles.disabled, style]}
     >
-      <Text style={[styles.text, styles[`${variant}Text`], textStyle]}>{title}</Text>
+      {isLoading ? (
+        <ActivityIndicator size="small" color={spinnerColor} />
+      ) : (
+        <Text style={[styles.text, styles[`${variant}Text`], textStyle]}>{title}</Text>
+      )}
     </TouchableOpacity>
   );
 };

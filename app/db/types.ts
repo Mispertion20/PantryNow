@@ -138,6 +138,14 @@ export interface AIShoppingRecommendations {
   reasoning: string;
 }
 
+export interface AIRecipeInstructions {
+  title: string;
+  intro: string;
+  steps: string[];
+  tips: string[];
+  personalization_note: string;
+}
+
 export interface Database {
   initDB(): Promise<void>;
   getProducts(): Promise<Product[]>;

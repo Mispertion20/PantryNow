@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../components/Button';
 import { CookIngredientsModal } from '../components/CookIngredientsModal';
 import { useAppContext } from '../context/AppContext';
+import type { AIRecipeInstructions } from '../db/types';
+import { apiRequest } from '../lib/api';
 
 export default function RecipeDetailScreen() {
   const router = useRouter();
@@ -18,6 +20,9 @@ export default function RecipeDetailScreen() {
     toggleRecipeLike,
   } = useAppContext();
   const [cookModalVisible, setCookModalVisible] = useState(false);
+  const [aiInstructions, setAiInstructions] = useState<AIRecipeInstructions | null>(null);
+  const [aiInstructionsLoading, setAiInstructionsLoading] = useState(false);
+  const [aiInstructionsError, setAiInstructionsError] = useState<string | null>(null);
 
   const recipe = useMemo(() => {
     return recipes.find((r) => r.id === Number(id));
@@ -39,6 +44,29 @@ export default function RecipeDetailScreen() {
 
   const canCook = missingIngredients.length === 0;
   const liked = recipe ? isRecipeLiked(recipe.id) : false;
+
+  const fetchAiInstructions = async () => {
+    if (!recipe) return;
+
+    setAiInstructionsLoading(true);
+    setAiInstructionsError(null);
+    try {
+      const response = await apiRequest<{ data: AIRecipeInstructions }>('/ai/recipe-instructions', {
+        method: 'POST',
+        body: { recipe_id: recipe.id },
+      });
+      setAiInstructions(response.data);
+    } catch (error) {
+      setAiInstructionsError(error instanceof Error ? error.message : 'Failed to generate instructions');
+    } finally {
+      setAiInstructionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!recipe) return;
+    void fetchAiInstructions();
+  }, [recipe?.id]);
 
   if (!recipe) {
     return (
@@ -230,6 +258,70 @@ export default function RecipeDetailScreen() {
           </View>
         )}
 
+        <View style={styles.section}>
+          <View style={styles.aiSectionHeader}>
+            <Text style={styles.sectionTitle}>AI Cooking Instructions</Text>
+            <TouchableOpacity
+              style={styles.aiRefreshButton}
+              onPress={() => {
+                void fetchAiInstructions();
+              }}
+              disabled={aiInstructionsLoading}
+            >
+              <Ionicons name="refresh" size={14} color="#6A1B9A" />
+              <Text style={styles.aiRefreshText}>{aiInstructionsLoading ? 'Generating...' : 'Regenerate'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {aiInstructionsLoading ? (
+            <View style={styles.aiLoadingBox}>
+              <ActivityIndicator size="small" color="#6A1B9A" />
+              <Text style={styles.aiLoadingText}>Generating personalized instructions...</Text>
+            </View>
+          ) : aiInstructionsError ? (
+            <View style={styles.aiErrorBox}>
+              <Text style={styles.aiErrorText}>{aiInstructionsError}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  void fetchAiInstructions();
+                }}
+                style={styles.aiRetryButton}
+              >
+                <Text style={styles.aiRetryButtonText}>Try Again</Text>
+              </TouchableOpacity>
+            </View>
+          ) : aiInstructions ? (
+            <View style={styles.aiInstructionsBox}>
+              {aiInstructions.intro ? <Text style={styles.aiIntroText}>{aiInstructions.intro}</Text> : null}
+
+              {aiInstructions.steps.map((step, index) => (
+                <View key={`ai-step-${index}`} style={styles.aiStepRow}>
+                  <View style={styles.aiStepBadge}>
+                    <Text style={styles.aiStepBadgeText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.aiStepText}>{step}</Text>
+                </View>
+              ))}
+
+              {aiInstructions.tips.length > 0 ? (
+                <View style={styles.aiTipsBox}>
+                  <Text style={styles.aiTipsTitle}>Tips</Text>
+                  {aiInstructions.tips.map((tip, index) => (
+                    <View key={`ai-tip-${index}`} style={styles.aiTipRow}>
+                      <Text style={styles.aiTipBullet}>•</Text>
+                      <Text style={styles.aiTipText}>{tip}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {aiInstructions.personalization_note ? (
+                <Text style={styles.aiPersonalizationNote}>{aiInstructions.personalization_note}</Text>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+
         {/* Spacer */}
         <View style={styles.spacer} />
       </ScrollView>
@@ -378,6 +470,137 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333',
     marginBottom: 12,
+  },
+  aiSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 10,
+  },
+  aiRefreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F3E5F5',
+  },
+  aiRefreshText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6A1B9A',
+  },
+  aiLoadingBox: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    elevation: 1,
+  },
+  aiLoadingText: {
+    fontSize: 13,
+    color: '#6A1B9A',
+    fontWeight: '500',
+  },
+  aiErrorBox: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#F8D7DA',
+  },
+  aiErrorText: {
+    color: '#B42318',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  aiRetryButton: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FEECE8',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  aiRetryButtonText: {
+    color: '#B42318',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  aiInstructionsBox: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+    elevation: 1,
+  },
+  aiIntroText: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 19,
+  },
+  aiStepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  aiStepBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#F3E5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  aiStepBadgeText: {
+    color: '#6A1B9A',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  aiStepText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#333',
+  },
+  aiTipsBox: {
+    marginTop: 2,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 10,
+    gap: 7,
+  },
+  aiTipsTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  aiTipRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  aiTipBullet: {
+    color: '#6B7280',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  aiTipText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#4B5563',
+    lineHeight: 18,
+  },
+  aiPersonalizationNote: {
+    marginTop: 2,
+    fontSize: 12,
+    color: '#6A1B9A',
+    lineHeight: 17,
   },
   descriptionBox: {
     backgroundColor: '#fff',
