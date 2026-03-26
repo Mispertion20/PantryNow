@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -136,7 +138,11 @@ export const IngredientManager: React.FC<IngredientManagerProps> = ({
 
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <KeyboardAvoidingView
+            style={styles.modalContent}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {editingIngredient ? 'Edit Ingredient' : 'Add Ingredient'}
@@ -146,7 +152,11 @@ export const IngredientManager: React.FC<IngredientManagerProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView
+              style={styles.modalBody}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
               <InputField
                 label="Product Name"
                 value={formData.productName}
@@ -175,7 +185,7 @@ export const IngredientManager: React.FC<IngredientManagerProps> = ({
                 onPress={handleSave}
               />
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 

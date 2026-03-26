@@ -2,19 +2,21 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
-import { Button } from '../components/Button';
-import { InputField } from '../components/InputField';
-import { ProductCard } from '../components/ProductCard';
-import { useAppContext } from '../context/AppContext';
-import type { AIShoppingRecommendations, Product, ShoppingSuggestion } from '../db/types';
-import { apiRequest } from '../lib/api';
+import { Button } from '@/components/Button';
+import { InputField } from '@/components/InputField';
+import { ProductCard } from '@/components/ProductCard';
+import { useAppContext } from '@/context/AppContext';
+import type { AIShoppingRecommendations, Product, ShoppingSuggestion } from '@/db/types';
+import { apiRequest } from '@/lib/api';
 
 export default function ProductsScreen() {
   const { products, loading, addProduct, updateProduct, deleteProduct } = useAppContext();
@@ -218,7 +220,11 @@ export default function ProductsScreen() {
 
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <KeyboardAvoidingView
+            style={styles.modalContent}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{editingProduct ? 'Edit Product' : 'Add Product'}</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
@@ -226,7 +232,11 @@ export default function ProductsScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView
+              style={styles.modalBody}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
               <InputField
                 label="Product Name"
                 value={formData.name}
@@ -262,7 +272,7 @@ export default function ProductsScreen() {
               <Button title="Cancel" variant="secondary" onPress={() => setModalVisible(false)} />
               <Button title={editingProduct ? 'Update' : 'Add'} variant="primary" onPress={handleSave} />
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 

@@ -1,10 +1,10 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
-import { PersonalizationSurveyForm } from '../components/PersonalizationSurveyForm';
-import { useAuthContext } from '../context/AuthContext';
-import * as db from '../db';
-import type { PersonalizationSurvey, PersonalizationSurveyInput } from '../db/types';
+import { PersonalizationSurveyForm } from '@/components/PersonalizationSurveyForm';
+import { useAuthContext } from '@/context/AuthContext';
+import * as db from '@/db';
+import type { PersonalizationSurvey, PersonalizationSurveyInput } from '@/db/types';
 
 export default function SurveyRetakeScreen() {
   const router = useRouter();

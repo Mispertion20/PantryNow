@@ -4,15 +4,17 @@ import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    KeyboardAvoidingView,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
-import { Button } from '../components/Button';
-import { InputField } from '../components/InputField';
-import * as db from '../db';
+import { Button } from '@/components/Button';
+import { InputField } from '@/components/InputField';
+import * as db from '@/db';
 
 export default function CustomInstructionsScreen() {
   const router = useRouter();
@@ -59,7 +61,17 @@ export default function CustomInstructionsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 16 : 0}
+    >
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/(tabs)/settings')}>
           <Ionicons name="chevron-back" size={20} color="#333" />
@@ -89,7 +101,8 @@ export default function CustomInstructionsScreen() {
           disabled={saving}
         />
       </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

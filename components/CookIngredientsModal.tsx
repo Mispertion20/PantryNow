@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -81,7 +83,11 @@ export const CookIngredientsModal: React.FC<CookIngredientsModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onCancel}>
       <View style={styles.overlay}>
-        <View style={styles.modalContent}>
+        <KeyboardAvoidingView
+          style={styles.modalContent}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+        >
           <View style={styles.header}>
             <Text style={styles.title}>Cook {recipeTitle}</Text>
             <TouchableOpacity onPress={onCancel}>
@@ -89,7 +95,11 @@ export const CookIngredientsModal: React.FC<CookIngredientsModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.body}>
+          <ScrollView
+            style={styles.body}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
             {usageRows.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No ingredients</Text>
@@ -145,7 +155,7 @@ export const CookIngredientsModal: React.FC<CookIngredientsModalProps> = ({
             <Button title="Cancel" variant="secondary" onPress={onCancel} />
             <Button title="Cook" variant="primary" onPress={handleConfirm} />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

@@ -3,19 +3,21 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
     Image,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View
 } from 'react-native';
-import { Button } from '../components/Button';
-import { IngredientManager } from '../components/IngredientManager';
-import { InputField } from '../components/InputField';
-import { RecipeCard } from '../components/RecipeCard';
-import { useAppContext } from '../context/AppContext';
-import type { Recipe, RecipeInput } from '../db/types';
+import { Button } from '@/components/Button';
+import { IngredientManager } from '@/components/IngredientManager';
+import { InputField } from '@/components/InputField';
+import { RecipeCard } from '@/components/RecipeCard';
+import { useAppContext } from '@/context/AppContext';
+import type { Recipe, RecipeInput } from '@/db/types';
 
 export default function MyRecipesScreen() {
   const { recipes, getRecipeIngredients, addRecipe, updateRecipe, deleteRecipe, recipeCategories } = useAppContext();
@@ -163,7 +165,11 @@ export default function MyRecipesScreen() {
 
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <KeyboardAvoidingView
+            style={styles.modalContent}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {showIngredientsOnly && editingRecipe
@@ -177,7 +183,11 @@ export default function MyRecipesScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView
+              style={styles.modalBody}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
               {!showIngredientsOnly && (
                 <>
                   <InputField
@@ -304,7 +314,7 @@ export default function MyRecipesScreen() {
                 </>
               )}
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>

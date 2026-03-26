@@ -2,11 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Button } from '../components/Button';
-import { CookIngredientsModal } from '../components/CookIngredientsModal';
-import { useAppContext } from '../context/AppContext';
-import type { AIRecipeInstructions } from '../db/types';
-import { apiRequest } from '../lib/api';
+import { Button } from '@/components/Button';
+import { CookIngredientsModal } from '@/components/CookIngredientsModal';
+import { useAppContext } from '@/context/AppContext';
+import type { AIRecipeInstructions } from '@/db/types';
+import { apiRequest } from '@/lib/api';
 
 export default function RecipeDetailScreen() {
   const router = useRouter();

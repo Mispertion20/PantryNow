@@ -9,8 +9,8 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { RecipeCardWithStatus } from '../components/RecipeCardWithStatus';
-import { useAppContext } from '../context/AppContext';
+import { RecipeCardWithStatus } from '@/components/RecipeCardWithStatus';
+import { useAppContext } from '@/context/AppContext';
 
 type SortOption = 'popular' | 'alphabetical' | 'newest';
 

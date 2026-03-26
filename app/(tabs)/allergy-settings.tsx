@@ -4,17 +4,19 @@ import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    KeyboardAvoidingView,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
-import { Button } from '../components/Button';
-import { InputField } from '../components/InputField';
-import { useAuthContext } from '../context/AuthContext';
-import * as db from '../db';
-import type { PersonalizationSurvey, PersonalizationSurveyInput } from '../db/types';
+import { Button } from '@/components/Button';
+import { InputField } from '@/components/InputField';
+import { useAuthContext } from '@/context/AuthContext';
+import * as db from '@/db';
+import type { PersonalizationSurvey, PersonalizationSurveyInput } from '@/db/types';
 
 export default function AllergySettingsScreen() {
   const router = useRouter();
@@ -115,7 +117,17 @@ export default function AllergySettingsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 16 : 0}
+    >
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/(tabs)/settings')}>
           <Ionicons name="chevron-back" size={20} color="#333" />
@@ -160,7 +172,8 @@ export default function AllergySettingsScreen() {
           disabled={saving}
         />
       </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

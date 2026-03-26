@@ -12,11 +12,11 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { useAppContext } from '../context/AppContext';
-import { useAuthContext } from '../context/AuthContext';
-import * as db from '../db';
-import type { HistoryItem } from '../db/types';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { useAppContext } from '@/context/AppContext';
+import { useAuthContext } from '@/context/AuthContext';
+import * as db from '@/db';
+import type { HistoryItem } from '@/db/types';
 
 type UsedProduct = {
   name: string;

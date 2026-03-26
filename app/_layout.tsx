@@ -1,8 +1,9 @@
+import { AppProvider } from '@/context/AppContext';
+import { AuthProvider, useAuthContext } from '@/context/AuthContext';
+import { initDB } from '@/db';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import { AppProvider } from './context/AppContext';
-import { AuthProvider, useAuthContext } from './context/AuthContext';
-import { initDB } from './db';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 function RootNavigator() {
   const router = useRouter();
@@ -53,10 +54,14 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AuthProvider>
-      <AppProvider>
-        <RootNavigator />
-      </AppProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <AuthProvider>
+          <AppProvider>
+            <RootNavigator />
+          </AppProvider>
+        </AuthProvider>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }

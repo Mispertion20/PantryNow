@@ -1,13 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Tabs } from "expo-router";
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-
-SplashScreen.preventAutoHideAsync();
+ 
 
 export default function TabsLayout() {
-  const [fontsLoaded, fontError] = useFonts({
+  const [fontsLoaded] = useFonts({
     'Sen-Regular': require('../../assets/fonts/Sen-Regular.ttf'),
     'Sen-Bold': require('../../assets/fonts/Sen-Bold.ttf'),
     'Sen-ExtraBold': require('../../assets/fonts/Sen-ExtraBold.ttf'),
@@ -15,13 +12,7 @@ export default function TabsLayout() {
     'Sen-SemiBold': require('../../assets/fonts/Sen-SemiBold.ttf'),
   });
 
-  useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded, fontError]);
-
-  if (!fontsLoaded && !fontError) {
+  if (!fontsLoaded) {
     return null;
   }
 

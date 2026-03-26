@@ -7,12 +7,12 @@ import {
     Text,
     View
 } from 'react-native';
-import { AIRecommendationsList } from '../components/AIRecommendations';
-import { CookIngredientsModal } from '../components/CookIngredientsModal';
-import { useAppContext } from '../context/AppContext';
-import { useAuthContext } from '../context/AuthContext';
-import type { AIRecommendations, Recipe, RecommendedRecipe } from '../db/types';
-import { apiRequest } from '../lib/api';
+import { AIRecommendationsList } from '@/components/AIRecommendations';
+import { CookIngredientsModal } from '@/components/CookIngredientsModal';
+import { useAppContext } from '@/context/AppContext';
+import { useAuthContext } from '@/context/AuthContext';
+import type { AIRecommendations, Recipe, RecommendedRecipe } from '@/db/types';
+import { apiRequest } from '@/lib/api';
 
 export default function HomeScreen() {
   const { recipes, products, cookRecipeWithIngredients, getRecipeIngredients } = useAppContext();

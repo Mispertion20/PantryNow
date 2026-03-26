@@ -210,7 +210,12 @@ export const PersonalizationSurveyForm: React.FC<Props> = ({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+    >
       <View style={styles.header}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
